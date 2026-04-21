@@ -1,0 +1,140 @@
+---
+title: "Overview"
+---
+
+## Overview
+
+Brief description of the project and its purpose. Replace this with actual project context.
+
+::: {.callout-note}
+# Note
+This documentation follows Quarto Markdown (QMD) format for reproducible, multi-format publishing. 
+:::
+
+## Getting Started
+
+### Prerequisites
+
+- Tool / runtime version X
+- Dependency Y
+
+### Installation
+
+```bash
+# Clone the repository
+git clone <repo-url>
+cd project-name
+
+# Install dependencies
+npm install   # or pip install -r requirements.txt
+```
+
+## Architecture
+
+### Components
+
+| Component | Responsibility | Technology |
+|-----------|---------------|------------|
+| API Layer | Request handling | FastAPI / Express |
+| Database  | Data persistence | PostgreSQL |
+| Frontend  | User interface | React / Vue |
+
+### Data Flow
+
+```{mermaid}
+flowchart LR
+  Client --> API --> DB[(Database)]
+  DB --> API --> Client
+```
+
+## API Reference
+
+### Endpoint: `GET /items`
+
+Returns a list of items.
+
+**Parameters**
+
+| Name   | Type   | Required | Description        |
+|--------|--------|----------|--------------------|
+| limit  | int    | No       | Max results (default: 20) |
+| offset | int    | No       | Pagination offset  |
+
+**Response**
+
+```json
+{
+  "data": [],
+  "total": 0,
+  "page": 1
+}
+```
+
+## Configuration
+
+```yaml
+# config.yaml
+app:
+  host: "0.0.0.0"
+  port: 8080
+  debug: false
+
+database:
+  url: "postgresql://user:pass@localhost:5432/db"
+  pool_size: 10
+```
+
+::: {.callout-warning}
+# Warning
+Never commit secrets or credentials. Use environment variables or a secrets manager.
+:::
+
+## Development
+
+### Running Tests
+
+```bash
+# Unit tests
+npm test
+
+# With coverage
+npm run test:coverage
+```
+
+### Code Style
+
+```bash
+# Lint
+npm run lint
+
+# Format
+npm run format
+```
+
+## Deployment
+
+::: {.callout-tip}
+# Tip
+Use CI/CD pipelines to automate deployment. See `.github/workflows/` for pipeline definitions.
+:::
+
+```bash
+# Build production artifact
+npm run build
+
+# Docker
+docker build -t app:latest .
+docker run -p 8080:8080 app:latest
+```
+
+## Changelog
+
+| Version | Date       | Notes               |
+|---------|------------|---------------------|
+| 1.0.0   | 2026-04-21 | Initial release     |
+
+## References
+
+- [Quarto Documentation](https://quarto.org/docs/)
+- [Project Repository](#)
+- [Issue Tracker](#)

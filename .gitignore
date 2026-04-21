@@ -1,0 +1,17 @@
+# Quarto generated output
+_output/
+.quarto/
+render/
+
+# Generated Word documents (keep template)
+*.docx
+*.pdf
+!template/*.docx
+template/adw*
+
+# Explicitly track source files
+!*.qmd
+!*.yml
+
+/.quarto/
+**/*.quarto_ipynb

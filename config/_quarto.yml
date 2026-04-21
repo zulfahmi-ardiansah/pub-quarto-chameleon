@@ -1,0 +1,14 @@
+project:
+  type: book
+  output-dir: _output
+
+book:
+  chapters:
+    - index.qmd
+
+format:
+  docx:
+    reference-doc: template.docx
+    callout-appearance: simple
+    toc: false
+    number-sections: false

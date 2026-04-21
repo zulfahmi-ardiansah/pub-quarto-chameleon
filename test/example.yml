@@ -1,0 +1,34 @@
+# ============================================================
+# RENDER CONFIGURATION EXAMPLE
+# Usage: qlon example.yml
+#        qlon example.yml --preset basic
+#        qlon example.yml --custom path/to/custom.docx
+# ============================================================
+
+# Cover page metadata — injected into the Quarto book config
+cover:
+  title: "Example Documentation"           # Main title of the document
+  subtitle: "A Tool for Creating Documentation"  # Subtitle shown below the title
+  author: "Zulfahmi Ardiansah"              # Author name printed on the cover
+  date: "21 April 2026"                     # Publication date shown on the cover
+
+# Header metadata — replaces placeholder text in the Word header on every page
+header:
+  title: "Example"                          # Replaces the "Head-Title" placeholder
+  subtitle: "Example Documentation"         # Replaces the "Head-Subtitle" placeholder
+
+# Content source — folder containing the .qmd chapter files
+content:
+  folder: "."                               # Path relative to this yml file
+                                            # All .qmd files in this folder become chapters,
+                                            # sorted alphabetically after the cover page (index.qmd)
+  table:
+    title: "Table of Contents"              # Title shown on the table of contents page (index.qmd)
+                                            # Omit this key to keep the default title from index.qmd
+
+# Quarto format overrides — any property here deep-merges into config/_quarto.yml
+# Only include what you want to change; everything else keeps its default value
+quarto:
+  format:
+    docx:
+      number-sections: false                # true = number headings (1, 1.1, 1.1.1), false = no numbers
