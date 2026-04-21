@@ -1,12 +1,12 @@
-# Qlon — Quarto Cameloon
+# Qlon — Quarto Chameleon
 
 ![Version](https://img.shields.io/badge/version-alpha-orange) ![Python](https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white) ![Quarto](https://img.shields.io/badge/quarto-1.x-75AADB?logo=quarto&logoColor=white)
 
-**Qlon** (short for *Quarto Cameloon*) is a command-line tool that converts Quarto Markdown (`.qmd`) into styled Word documents and PDFs.
+**Qlon** (short for *Quarto Chameleon*) is a command-line tool that converts Quarto Markdown (`.qmd`) into styled Word documents and PDFs.
 
 Writing documentation in Word is tedious, hard to track, and doesn't play well with version control. Markdown solves all of that — and with AI now able to generate `.md` files directly from source code and logic, authoring docs has never been faster. The only friction left is delivery: most people still expect a `.docx` or `.pdf`. Qlon removes that friction.
 
-You write in `.qmd`, describe your document in a YAML config file, and Qlon handles the rest — assembling the workspace, injecting metadata, rendering to Word via [Quarto](https://quarto.org/), replacing header placeholders, generating a PDF, and delivering the finished files to your working directory. No touching Quarto configs or Word templates required. Just like a Cameloon.
+You write in `.qmd`, describe your document in a YAML config file, and Qlon handles the rest — assembling the workspace, injecting metadata, rendering to Word via [Quarto](https://quarto.org/), replacing header placeholders, generating a PDF, and delivering the finished files to your working directory. No touching Quarto configs or Word templates required. Just like a Chameleon.
 
 ---
 
