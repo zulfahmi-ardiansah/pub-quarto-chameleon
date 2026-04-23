@@ -20,7 +20,7 @@ When you run `qlon <config.yml>`, the following steps execute in order:
 |---|------|-------------|
 | 1 | Set up workspace | Creates a UUID-named subfolder inside `render/` and copies the base Quarto config, cover page, and Word reference template into it. The template used is `basic.docx` by default, or the one selected via `--preset` / `--custom`. |
 | 2 | Patch TOC title | *(Optional)* If `content.table.title` is set in your config, rewrites the title in the cover page frontmatter. |
-| 3 | Copy content | Copies all `.qmd` chapter files from your content folder into the workspace, sorted alphabetically. |
+| 3 | Copy content | Copies all `.qmd` and `.md` files from your content folder into the workspace, sorted alphabetically. `.md` files are staged as `.qmd` — Quarto picks up their first `#` heading as the chapter title natively. Any relative images referenced in the files are also copied into the workspace. |
 | 4 | Configure Quarto | Injects cover metadata (title, subtitle, author, date) and the chapter list into the workspace `_quarto.yml`. Any `quarto:` overrides in your config are deep-merged on top. |
 | 5 | Render | Runs `quarto render` inside the workspace, producing a `.docx` file styled by the reference template. |
 | 6 | Patch headers | Opens the rendered `.docx` and replaces the `Head-Title` and `Head-Subtitle` placeholder strings in every page header. Also marks the TOC field as dirty so Word refreshes it on next open. |
@@ -232,16 +232,18 @@ The same mechanism applies to the **cover page**. Word supports a separate first
 
 ## Writing Content
 
-Chapter files are standard `.qmd` files (Quarto Markdown). Each file becomes one chapter in the final document.
+Qlon accepts both `.qmd` (Quarto Markdown) and `.md` (standard Markdown) files. Each file becomes one chapter in the final document, sorted alphabetically by filename.
 
 ```
 docs/
-├── 01-introduction.qmd
+├── 01-introduction.md
 ├── 02-installation.qmd
-└── 03-usage.qmd
+└── 03-usage.md
 ```
 
-Each file should include a YAML frontmatter block at the top:
+### QMD files
+
+Include a YAML frontmatter block at the top with at least a `title`:
 
 ```yaml
 ---
@@ -251,7 +253,21 @@ title: "Introduction"
 Your content here...
 ```
 
-The Word template (`basic.docx`) is automatically applied to every chapter — no frontmatter configuration needed. To use a different template, pass `--preset` or `--custom` on the command line (see [Usage](#usage)).
+### MD files
+
+No frontmatter needed. Qlon stages `.md` files as `.qmd` automatically — Quarto picks up the first `#` heading as the chapter title:
+
+```markdown
+# Introduction
+
+Your content here...
+```
+
+### Images
+
+Relative image references are handled automatically. If your file references `![logo](images/logo.png)`, Qlon copies `images/logo.png` from your content folder into the workspace so the path resolves correctly during rendering.
+
+The Word template (`basic.docx`) is automatically applied to every chapter — no per-file configuration needed. To use a different template, pass `--preset` or `--custom` on the command line (see [Usage](#usage)).
 
 ---
 

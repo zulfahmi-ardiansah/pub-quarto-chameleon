@@ -12,6 +12,7 @@ import argparse
 import contextlib
 import importlib.util
 import io
+import re
 import shutil
 import subprocess
 import sys
@@ -46,6 +47,7 @@ OUTPUT_DIR = RENDER_DIR / "_output"  # follows RENDER_DIR at runtime
 _TOC_INSTR = "TOC"
 _PLACEHOLDER_TITLE = "Head-Title"
 _PLACEHOLDER_SUBTITLE = "Head-Subtitle"
+_IMG_REF = re.compile(r'!\[.*?\]\(([^)]+)\)')
 _console = Console()
 
 
@@ -80,13 +82,44 @@ def patch_index_title(title: str) -> None:
     index_qmd.write_text("---".join(parts), encoding="utf-8")
 
 
+def _copy_images(text: str, src_dir: Path) -> None:
+    """Copy relative images referenced in *text* from *src_dir* into the workspace."""
+    for match in _IMG_REF.finditer(text):
+        raw = match.group(1).split()[0]  # strip optional title attribute
+        if raw.startswith(("http://", "https://", "/")):
+            continue
+        img_src = (src_dir / raw).resolve()
+        if img_src.exists():
+            img_dest = RENDER_DIR / raw
+            img_dest.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(img_src, img_dest)
+
+
+def _md_to_qmd(src: Path, dest: Path) -> None:
+    """Copy a .md file to the workspace as .qmd — Quarto picks up the first H1 natively."""
+    shutil.copy(src, dest)
+
+
 def copy_content(content_folder: str, config_dir: Path) -> list[str]:
-    """Copy all .qmd files from *content_folder* into render/ and return their names."""
+    """Copy all .qmd and .md files from *content_folder* into the workspace.
+
+    .md files are copied as .qmd — Quarto picks up their H1 as the chapter title natively.
+    Relative images referenced in any file are also copied into the workspace.
+    Returns the list of .qmd filenames staged in the workspace.
+    """
     src = (config_dir / content_folder).resolve()
+    files = sorted(list(src.glob("*.qmd")) + list(src.glob("*.md")), key=lambda f: f.name)
     names = []
-    for f in sorted(src.glob("*.qmd")):
-        shutil.copy(f, RENDER_DIR / f.name)
-        names.append(f.name)
+    for f in files:
+        text = f.read_text(encoding="utf-8")
+        _copy_images(text, f.parent)
+        if f.suffix == ".md":
+            dest_name = f.stem + ".qmd"
+            _md_to_qmd(f, RENDER_DIR / dest_name)
+        else:
+            dest_name = f.name
+            shutil.copy(f, RENDER_DIR / dest_name)
+        names.append(dest_name)
     return names
 
 
