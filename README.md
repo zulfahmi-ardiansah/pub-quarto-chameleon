@@ -2,11 +2,11 @@
 
 ![Version](https://img.shields.io/badge/version-alpha-orange) ![Python](https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white) ![Quarto](https://img.shields.io/badge/quarto-1.x-75AADB?logo=quarto&logoColor=white)
 
-**Qlon** (short for *Quarto Chameleon*) is a command-line tool that converts Quarto Markdown (`.qmd`) into styled Word documents and PDFs.
+**Qlon** (short for *Quarto Chameleon*) is a command-line tool that converts Quarto Markdown (`.qmd`) into styled Word documents.
 
-Writing documentation in Word is tedious, hard to track, and doesn't play well with version control. Markdown solves all of that — and with AI now able to generate `.md` files directly from source code and logic, authoring docs has never been faster. The only friction left is delivery: most people still expect a `.docx` or `.pdf`. Qlon removes that friction.
+Writing documentation in Word is tedious, hard to track, and doesn't play well with version control. Markdown solves all of that — and with AI now able to generate `.md` files directly from source code and logic, authoring docs has never been faster. The only friction left is delivery: most people still expect a `.docx`. Qlon removes that friction.
 
-You write in `.qmd`, describe your document in a YAML config file, and Qlon handles the rest — assembling the workspace, injecting metadata, rendering to Word via [Quarto](https://quarto.org/), replacing header placeholders, generating a PDF, and delivering the finished files to your working directory. No touching Quarto configs or Word templates required. Just like a Chameleon.
+You write in `.qmd`, describe your document in a YAML config file, and Qlon handles the rest — assembling the workspace, injecting metadata, rendering to Word via [Quarto](https://quarto.org/), replacing header placeholders, and delivering the finished files to your working directory. No touching Quarto configs or Word templates required. Just like a Chameleon.
 
 ---
 
@@ -20,19 +20,30 @@ When you run `qlon <config.yml>`, the following steps execute in order:
 |---|------|-------------|
 | 1 | Set up workspace | Creates a UUID-named subfolder inside `render/` and copies the base Quarto config, cover page, and Word reference template into it. The template used is `basic.docx` by default, or the one selected via `--preset` / `--custom`. |
 | 2 | Patch TOC title | *(Optional)* If `content.table.title` is set in your config, rewrites the title in the cover page frontmatter. |
-| 3 | Copy content | Copies all `.qmd` and `.md` files from your content folder into the workspace, sorted alphabetically. `.md` files are staged as `.qmd` — Quarto picks up their first `#` heading as the chapter title natively. Any relative images referenced in the files are also copied into the workspace. |
+| 3 | Copy content | Copies all `.qmd` and `.md` files from your content folder into the workspace, sorted alphabetically. `.md` files are staged as `.qmd` — Quarto picks up their first `#` heading as the chapter title natively. Any relative images referenced in the files are also copied. Mermaid diagrams (` ```mermaid ` blocks) are rendered to high-resolution PNG images at this step, named `Diagram-x-y.png` (chapter-image order), and replaced with image references. |
 | 4 | Configure Quarto | Injects cover metadata (title, subtitle, author, date) and the chapter list into the workspace `_quarto.yml`. Any `quarto:` overrides in your config are deep-merged on top. |
 | 5 | Render | Runs `quarto render` inside the workspace, producing a `.docx` file styled by the reference template. |
 | 6 | Patch headers | Opens the rendered `.docx` and replaces the `Head-Title` and `Head-Subtitle` placeholder strings in every page header. Also marks the TOC field as dirty so Word refreshes it on next open. |
-| 7 | Convert to PDF | Converts the patched `.docx` to a `.pdf` alongside it. |
-| 8 | Collect output | Copies the final `.docx` and `.pdf` to the directory where you ran the command. |
+| 7 | Collect output | Copies the final `.docx` to the directory where you ran the command. |
+| 8 | Collect images | Copies all images used in the document to an `Image/` folder in your working directory, named `Diagram-x-y.ext` (x = chapter order, y = image order within the chapter). |
 | 9 | Clean up | Deletes the UUID workspace folder. The `render/` parent directory remains but is otherwise empty. |
+
+---
+
+## Post-render checklist
+
+After each run, Qlon prints a checklist. Keep these in mind when opening the output:
+
+1. **Update fields** — Word will prompt you to update fields on first open. Accept it to refresh the Table of Contents.
+2. **Resize images** — Images are embedded at their original size. Check each page and resize manually in Word as needed.
+3. **Mermaid diagrams** — Diagrams are pre-rendered as PNG. If a diagram looks too small or blurry, scale it up in Word.
+4. **Image folder** — All images are also saved to `./Image/` for reference or reuse.
 
 ---
 
 ## Requirements
 
-Before using qlon, make sure the following are installed on your system:
+Before using Qlon, make sure the following are installed on your system:
 
 ### Python 3.13+
 
@@ -51,6 +62,15 @@ quarto --version
 ```
 
 Both must be available on your system `PATH`. The executables will check for both and print a clear message if either is missing.
+
+### Playwright
+
+Qlon uses [Playwright](https://playwright.dev/python/) to render Mermaid diagrams to PNG images. Install it after setting up the Python environment:
+
+```bash
+pip install playwright
+playwright install chromium
+```
 
 ---
 
@@ -71,7 +91,7 @@ Using a virtual environment is strongly recommended to isolate dependencies from
 python -m venv .venv
 ```
 
-Supported virtual environment names that qlon detects automatically: `.venv`, `venv`, `env`. Place it at the project root and the executable will use it without any extra configuration.
+Supported virtual environment names that Qlon detects automatically: `.venv`, `venv`, `env`. Place it at the project root and the executable will use it without any extra configuration.
 
 **3. Activate the environment and install dependencies**
 
@@ -88,6 +108,12 @@ pip install -r requirements.txt
 ```
 
 > If you use `uv`, `poetry`, `conda`, or any other package manager, install from `requirements.txt` using your preferred tool.
+
+**4. Install Playwright browser binaries**
+
+```bash
+playwright install chromium
+```
 
 ---
 
@@ -106,7 +132,7 @@ chmod +x bin/qlon.sh    # first time only
 bin/qlon.sh <config.yml>
 ```
 
-The output `.docx` and `.pdf` are written to whichever directory you run the command from.
+The output `.docx` is written to whichever directory you run the command from. Images are saved to an `Image/` subfolder in the same location.
 
 ### Arguments
 
@@ -205,6 +231,12 @@ Every rendered document follows this fixed order:
 2. **Table of contents** — also part of the cover page, listing all chapters with page numbers
 3. **Content** — your `.qmd` chapter files, in alphabetical order
 
+In addition to the `.docx`, an `Image/` folder is created in your working directory containing all images used in the document, named `Diagram-x-y.ext`:
+
+- `x` = chapter number (1-based, alphabetical order of source files)
+- `y` = image order within that chapter
+- `ext` = original file extension (`.png`, `.jpg`, etc.)
+
 ---
 
 ## Customizing the Template
@@ -266,6 +298,25 @@ Your content here...
 ### Images
 
 Relative image references are handled automatically. If your file references `![logo](images/logo.png)`, Qlon copies `images/logo.png` from your content folder into the workspace so the path resolves correctly during rendering.
+
+After rendering, all images are also exported to `./Image/` in your working directory. Images are named `Diagram-x-y.ext` where `x` is the chapter number and `y` is the image's position within that chapter.
+
+> **Note:** Images are embedded at their original size. Check the output document and resize images manually in Word where needed.
+
+### Mermaid Diagrams
+
+Standard Mermaid fenced code blocks are supported in both `.md` and `.qmd` files:
+
+````markdown
+```mermaid
+flowchart LR
+    A[Write Markdown] --> B[Run Qlon] --> C[Get DOCX]
+```
+````
+
+Qlon renders each diagram to a high-resolution PNG (3× pixel density) using a headless Chromium browser via Playwright, then embeds it as an inline image. Diagrams are named `Diagram-x-y.png` in document order alongside other images.
+
+> **Note:** Mermaid diagrams are rasterised at render time. If a diagram appears too small in the output, scale the image up in Word.
 
 The Word template (`basic.docx`) is automatically applied to every chapter — no per-file configuration needed. To use a different template, pass `--preset` or `--custom` on the command line (see [Usage](#usage)).
 
@@ -341,7 +392,7 @@ The Word template (`basic.docx`) is automatically applied to every chapter — n
 
 ### `Some required packages are not installed`
 
-**Cause:** One or more Python dependencies (`pyyaml`, `python-docx`, `docx2pdf`, `rich`) are missing from the active Python environment.
+**Cause:** One or more Python dependencies (`pyyaml`, `python-docx`, `rich`, `playwright`) are missing from the active Python environment.
 
 **Solution:**
 - Activate your virtual environment first, then run:
@@ -349,6 +400,20 @@ The Word template (`basic.docx`) is automatically applied to every chapter — n
   pip install -r requirements.txt
   ```
 - If you use a different package manager (uv, poetry, conda), install from `requirements.txt` using your tool of choice
+
+---
+
+### Mermaid diagrams are not rendering as images
+
+**Cause:** Playwright is not installed or the Chromium browser binaries have not been downloaded.
+
+**Solution:**
+```bash
+pip install playwright
+playwright install chromium
+```
+
+Playwright and its Chromium binaries are required. Install both before running Qlon (see [Installation](#installation)).
 
 ---
 

@@ -19,7 +19,6 @@ debugpy==1.8.20
 decorator==5.2.1
 defusedxml==0.7.1
 docx==0.2.4
-docx2pdf==0.1.8
 executing==2.2.1
 fastjsonschema==2.21.2
 fonttools==4.62.1
@@ -85,6 +84,7 @@ python-docx==1.2.0
 python-json-logger==4.1.0
 pywin32==311
 pywinpty==3.0.3
+playwright
 pyyaml==6.0.3
 pyzmq==27.1.0
 referencing==0.37.0
