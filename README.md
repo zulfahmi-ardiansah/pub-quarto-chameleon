@@ -23,7 +23,7 @@ When you run `qlon <config.yml>`, the following steps execute in order:
 | 3 | Copy content | Copies all `.qmd` and `.md` files from your content folder into the workspace, sorted alphabetically. `.md` files are staged as `.qmd` — Quarto picks up their first `#` heading as the chapter title natively. Any relative images referenced in the files are also copied. Mermaid diagrams (` ```mermaid ` blocks) are rendered to high-resolution PNG images at this step, named `Diagram-x-y.png` (chapter-image order), and replaced with image references. |
 | 4 | Configure Quarto | Injects cover metadata (title, subtitle, author, date) and the chapter list into the workspace `_quarto.yml`. Any `quarto:` overrides in your config are deep-merged on top. |
 | 5 | Render | Runs `quarto render` inside the workspace, producing a `.docx` file styled by the reference template. |
-| 6 | Patch headers | Opens the rendered `.docx` and replaces the `Head-Title` and `Head-Subtitle` placeholder strings in every page header. Also marks the TOC field as dirty so Word refreshes it on next open. |
+| 6 | Patch headers | Opens the rendered `.docx` and replaces the `Head-Title` and `Head-Subtitle` placeholder strings in every page header. Scales down any inline image larger than the page content zone (page area minus margins) to fit while preserving aspect ratio. Also marks the TOC field as dirty so Word refreshes it on next open. |
 | 7 | Collect output | Copies the final `.docx` to the directory where you ran the command. |
 | 8 | Collect images | Copies all images used in the document to an `Image/` folder in your working directory, named `Diagram-x-y.ext` (x = chapter order, y = image order within the chapter). |
 | 9 | Clean up | Deletes the UUID workspace folder. The `render/` parent directory remains but is otherwise empty. |
@@ -35,7 +35,7 @@ When you run `qlon <config.yml>`, the following steps execute in order:
 After each run, Qlon prints a checklist. Keep these in mind when opening the output:
 
 1. **Update fields** — Word will prompt you to update fields on first open. Accept it to refresh the Table of Contents.
-2. **Resize images** — Images are embedded at their original size. Check each page and resize manually in Word as needed.
+2. **Image sizing** — Oversized images are auto-scaled to fit the page content zone (page area minus margins), preserving aspect ratio. Smaller images keep their original size — enlarge manually in Word if needed.
 3. **Mermaid diagrams** — Diagrams are pre-rendered as PNG. If a diagram looks too small or blurry, scale it up in Word.
 4. **Image folder** — All images are also saved to `./Image/` for reference or reuse.
 
@@ -301,7 +301,7 @@ Relative image references are handled automatically. If your file references `![
 
 After rendering, all images are also exported to `./Image/` in your working directory. Images are named `Diagram-x-y.ext` where `x` is the chapter number and `y` is the image's position within that chapter.
 
-> **Note:** Images are embedded at their original size. Check the output document and resize images manually in Word where needed.
+> **Note:** Images larger than the page content zone (page area minus margins) are automatically scaled down to fit, keeping their aspect ratio. Smaller images are embedded at their original size — enlarge them manually in Word if needed.
 
 ### Mermaid Diagrams
 

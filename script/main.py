@@ -44,6 +44,9 @@ RENDER_BASE_DIR = ROOT_DIR / "render"
 RENDER_DIR = RENDER_BASE_DIR  # reassigned to a UUID subfolder at runtime
 OUTPUT_DIR = RENDER_DIR / "_output"  # follows RENDER_DIR at runtime
 
+# Rough height of one text line in EMU (~14pt, 1 EMU = 1/914400 in, 1pt = 12700 EMU).
+# Used to estimate header/footer text height when no banner image is present.
+_LINE_EMU = 14 * 12700
 _TOC_INSTR = "TOC"
 _PLACEHOLDER_TITLE = "Head-Title"
 _PLACEHOLDER_SUBTITLE = "Head-Subtitle"
@@ -261,11 +264,66 @@ def mark_toc_dirty(doc: Document) -> None:
                 break
 
 
+def _band_content_height(band) -> int:
+    """Estimate the rendered height (EMU) of a header/footer's content.
+
+    Takes the larger of any embedded drawing height (e.g. a banner/logo image, read from
+    its DrawingML ``wp:extent`` / ``a:ext`` ``cy``) and a rough text estimate of one line
+    per non-empty paragraph. Returns 0 for an empty header/footer.
+    """
+    el = band._element
+    img_h = max(
+        (int(ext.get("cy", 0)) for ext in el.iter(qn("wp:extent"), qn("a:ext"))),
+        default=0,
+    )
+    text_lines = sum(
+        1 for p in el.iter(qn("w:p"))
+        if any((t.text or "").strip() for t in p.iter(qn("w:t")))
+    )
+    return max(img_h, text_lines * _LINE_EMU)
+
+
+def resize_images_to_fit(doc: Document) -> None:
+    """Scale down inline images that exceed the page content zone, preserving aspect ratio.
+
+    The content zone is the page area minus its margins. The header and footer are
+    additionally accounted for: each sits at its distance from the page edge and its own
+    content (a banner image, a footer line) has height, so the band actually occupied is
+    ``distance + content_height``. Whatever that band pushes past the margin is reserved
+    so a full-height image stays clear of the header and footer instead of overlapping
+    or running flush against them. All values come from the first section.
+
+    An image larger than the zone in either dimension is scaled by the smaller of the
+    width/height ratios so it fits fully while keeping its original proportions. Images
+    already within the zone are left untouched.
+    """
+    section = doc.sections[0]
+    header_band = section.header_distance + _band_content_height(section.header)
+    footer_band = section.footer_distance + _band_content_height(section.footer)
+    top_reserve = max(section.top_margin, header_band)
+    bottom_reserve = max(section.bottom_margin, footer_band)
+    max_w = section.page_width - section.left_margin - section.right_margin
+    max_h = section.page_height - top_reserve - bottom_reserve
+    if max_w <= 0 or max_h <= 0:
+        return
+
+    for shape in doc.inline_shapes:
+        w, h = shape.width, shape.height
+        if not w or not h:
+            continue
+        if w <= max_w and h <= max_h:
+            continue
+        scale = min(max_w / w, max_h / h)
+        shape.width = int(w * scale)
+        shape.height = int(h * scale)
+
+
 def patch_headers(replacements: dict[str, str]) -> None:
-    """Apply header replacements and TOC dirty-flag to every DOCX in the output dir."""
+    """Apply header replacements, image auto-fit, and TOC dirty-flag to every DOCX in the output dir."""
     for docx_file in OUTPUT_DIR.glob("*.docx"):
         doc = Document(docx_file)
         replace_in_header(doc, replacements)
+        resize_images_to_fit(doc)
         mark_toc_dirty(doc)
         doc.save(docx_file)
 
@@ -387,7 +445,7 @@ def main() -> None:
         quarto_render()
         progress.advance(task)
 
-        progress.update(task, description="Applying header replacements and marking TOC for refresh...")
+        progress.update(task, description="Applying header replacements, auto-fitting images, and marking TOC for refresh...")
         patch_headers({
             _PLACEHOLDER_TITLE: header.get("title", ""),
             _PLACEHOLDER_SUBTITLE: header.get("subtitle", ""),
@@ -413,8 +471,8 @@ def main() -> None:
     notes.append("1. ", style="bold yellow")
     notes.append("Open the DOCX — Word will prompt to update fields. Accept it to refresh the Table of Contents.\n")
     notes.append("2. ", style="bold yellow")
-    notes.append("Check every image in the document. ")
-    notes.append("Images are not auto-sized — resize them manually in Word as needed.\n", style="bold")
+    notes.append("Oversized images are auto-scaled to fit the page content zone. ")
+    notes.append("Smaller images keep their original size — enlarge manually in Word if needed.\n", style="bold")
     notes.append("3. ", style="bold yellow")
     notes.append("Mermaid diagrams are pre-rendered as PNG. If a diagram looks too small or blurry, scale it up in Word.\n")
     
