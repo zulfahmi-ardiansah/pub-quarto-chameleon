@@ -1,7 +1,9 @@
 @echo off
 set "ROOT=%~dp0..\"
 
-if exist "%ROOT%.venv\Scripts\python.exe" (
+if exist "%ROOT%.env\Scripts\python.exe" (
+    set "PYTHON=%ROOT%.env\Scripts\python.exe"
+) else if exist "%ROOT%.venv\Scripts\python.exe" (
     set "PYTHON=%ROOT%.venv\Scripts\python.exe"
 ) else if exist "%ROOT%venv\Scripts\python.exe" (
     set "PYTHON=%ROOT%venv\Scripts\python.exe"

@@ -1,7 +1,16 @@
+# Environment
+.env
+.venv
+env
+venv
+
 # Quarto generated output
 _output/
 .quarto/
 render/
+
+# Ignore
+__pycache__
 
 # Generated Word documents (keep template)
 *.docx
