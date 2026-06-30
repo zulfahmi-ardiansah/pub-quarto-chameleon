@@ -1,0 +1,10 @@
+services:
+  qlon-web:
+    build: .
+    image: qlon-web
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./web/static:/app/web/static
+      - ./web/templates:/app/web/templates
+    restart: unless-stopped

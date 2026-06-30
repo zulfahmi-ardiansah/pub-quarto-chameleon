@@ -1,6 +1,6 @@
 # Qlon — Quarto Chameleon
 
-![Version](https://img.shields.io/badge/version-alpha-orange) ![Python](https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white) ![Quarto](https://img.shields.io/badge/quarto-1.x-75AADB?logo=quarto&logoColor=white)
+![Version](https://img.shields.io/badge/version-beta-blue) ![Python](https://img.shields.io/badge/python-3.13+-3776AB?logo=python&logoColor=white) ![Quarto](https://img.shields.io/badge/quarto-1.x-75AADB?logo=quarto&logoColor=white)
 
 **Qlon** (short for *Quarto Chameleon*) is a command-line tool that converts Quarto Markdown (`.qmd`) into styled Word documents.
 
@@ -38,6 +38,49 @@ After each run, Qlon prints a checklist. Keep these in mind when opening the out
 2. **Image sizing** — Oversized images are auto-scaled to fit the page content zone (page area minus margins), preserving aspect ratio. Smaller images keep their original size — enlarge manually in Word if needed.
 3. **Mermaid diagrams** — Diagrams are pre-rendered as PNG. If a diagram looks too small or blurry, scale it up in Word.
 4. **Image folder** — All images are also saved to `./Image/` for reference or reuse.
+
+---
+
+## Web Interface
+
+Qlon ships with a browser-based wizard that wraps the same render pipeline. No command line needed — paste Markdown (or an AI response), fill in cover details, and download the `.docx`.
+
+```
+┌─────────────────────────────────────────────┐
+│  Content  ──  Details  ──  Review  ──  Done │  ← progress in the top bar
+├─────────────────────────────────────────────┤
+│  Paste / upload Markdown                    │
+│  Fill title, author, template               │
+│  Generate → auto-download .docx             │
+└─────────────────────────────────────────────┘
+```
+
+**Features:** drag-and-drop file upload · paste from clipboard · Markdown preview (modal) · dark mode · EN/ID language toggle · loading overlay · success screen with re-download.
+
+### Run with Docker (recommended)
+
+The Docker image bundles Python, Quarto, and a headless Chromium (for Mermaid diagrams). The first build takes a few minutes (~1.5 GB image).
+
+```bash
+docker compose up --build
+```
+
+Open <http://localhost:5000>.
+
+`web/static/` and `web/templates/` are volume-mounted, so edits to CSS, JS, and HTML show on refresh — no rebuild needed. Changes to `web/app.py` require a restart (`docker compose up --build`).
+
+### Run locally
+
+Requires Python 3.13, Quarto, and Playwright Chromium already on PATH (see [Requirements](#requirements)).
+
+```bash
+pip install -r requirements.txt -r web/requirements-web.txt
+playwright install chromium     # first time only
+
+python web/app.py               # dev server at http://localhost:5000
+```
+
+See [`web/README.md`](web/README.md) for full web interface documentation.
 
 ---
 

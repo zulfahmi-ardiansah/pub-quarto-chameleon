@@ -27,3 +27,6 @@ template/adw*
 
 # Experiment
 experiment/
+
+# Web interface job workspaces
+web/jobs/

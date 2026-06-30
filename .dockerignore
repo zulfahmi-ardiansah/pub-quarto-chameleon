@@ -1,0 +1,15 @@
+.git
+.gitignore
+.venv
+venv
+env
+.env
+__pycache__
+**/__pycache__
+render/
+web/jobs/
+_output/
+.quarto/
+**/*.quarto_ipynb
+experiment/
+*.pdf

@@ -1,0 +1,11 @@
+# Self-contained runtime deps for the Qlon web interface + render pipeline.
+#
+# The repo-root requirements.txt is a frozen Windows env dump (pywin32, jupyter,
+# matplotlib, ...) and won't install on Linux. The pipeline (script/main.py) only
+# needs the four packages below; the web layer adds flask + gunicorn.
+pyyaml==6.0.3
+python-docx==1.2.0
+rich==15.0.0
+playwright
+flask==3.1.0
+gunicorn==23.0.0
