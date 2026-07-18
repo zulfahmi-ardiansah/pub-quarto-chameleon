@@ -1,7 +1,7 @@
 """Extract a .docx (or .md) input into clean Markdown pages (qlon ingest path).
 
 Usage:
-    qlon <input.docx|input.md> [--use-llm] [--layout flat|fuma] [-o DIR]
+    qlon <input.docx|input.md> [--use-llm] [--layout flat|fuma]
 
 Extracts the .docx to Markdown with `quarto pandoc`, splits it at headings, then
 (with --use-llm) cleans each section via an LLM or, by default, passes the raw text
@@ -787,20 +787,15 @@ def reclaim_images(
 def parse_args() -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Structure-aware Markdown cleaner.")
     p.add_argument("input", nargs="?", default=str(ROOT_DIR / "experiment" / "output.md"))
-    p.add_argument("-o", "--output", default=None,
-                   help="destination for the final clean files + media "
-                        "(default: <input folder>/<input name>/)")
     p.add_argument("--layout", choices=["flat", "fuma"], default="flat",
                    help="output layout: 'flat' (all .md files + a media/ subfolder, "
                         "default) or 'fuma' (Fumadocs: content/docs/<topic>/ + "
                         "public/images/<topic>/ + meta.json). 'fuma' requires the LLM.")
     p.add_argument("--model", default=default_model(),
                    help="model id (default: $LLM_MODEL or the built-in default)")
-    p.add_argument("--work-dir", default=str(ROOT_DIR / "render"),
-                   help="intermediate artifacts: per-chunk files + structure JSON")
     p.add_argument("--no-merge", action="store_true", help="skip final merge step")
     p.add_argument("--keep-work", action="store_true",
-                   help="keep the per-run work/<uuid> scratch folder (default: delete)")
+                   help="keep the per-run render/<uuid> workspace (default: delete)")
     p.add_argument("--allow-reorder", action="store_true",
                    help="apply the LLM's suggested section reorder (if any)")
     p.add_argument("--use-llm", action="store_true",
@@ -831,9 +826,15 @@ def main() -> int:
         print(f"ERROR: input not found: {input_path}", file=sys.stderr)
         return 1
 
-    work_dir = Path(args.work_dir) / uuid.uuid4().hex
-    work_dir.mkdir(parents=True, exist_ok=True)
-    target_dir = Path(args.output) if args.output else input_path.parent / input_path.stem
+    # Fixed scratch base under the repo (like render.py); each run gets a fresh
+    # UUID subfolder that must not pre-exist.
+    work_base = ROOT_DIR / "render"
+    work_base.mkdir(exist_ok=True)
+    work_dir = work_base / str(uuid.uuid4())
+    work_dir.mkdir()
+    # Final output lands in the caller's working directory (like render.py),
+    # grouped in a subfolder named after the input.
+    target_dir = Path.cwd() / input_path.stem
     topic = slugify(input_path.stem)
     if fuma:
         pages_dir = target_dir / "content" / "docs" / topic

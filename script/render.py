@@ -393,6 +393,8 @@ def main() -> None:
     parser.add_argument("--test", action="store_true", help="Run using example.yml")
     parser.add_argument("--preset", metavar="NAME", help="Name of a built-in template in the template/ folder (e.g. basic)")
     parser.add_argument("--custom", metavar="PATH", help="Path to a custom .docx reference template")
+    parser.add_argument("--keep-work", action="store_true",
+                        help="keep the per-run render/<uuid> workspace (default: delete)")
     args = parser.parse_args()
 
     if args.test:
@@ -496,8 +498,11 @@ def main() -> None:
         collect_images(original_cwd, chapter_images)
         progress.advance(task)
 
-        progress.update(task, description="Cleaning up render workspace...")
-        cleanup()
+        if args.keep_work:
+            progress.update(task, description=f"Keeping render workspace: {RENDER_DIR}")
+        else:
+            progress.update(task, description="Cleaning up render workspace...")
+            cleanup()
         progress.advance(task)
 
     _console.print("\n[bold green]Done![/bold green] Your DOCX is ready in the current directory.\n")
