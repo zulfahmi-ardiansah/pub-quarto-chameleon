@@ -11,6 +11,7 @@ config/prompt.py; the LLM is configured via LLM_API_KEY / LLM_BASE_URL / LLM_MOD
 from __future__ import annotations
 import argparse
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -791,8 +792,12 @@ def parse_args() -> argparse.Namespace:
                    help="output layout: 'flat' (all .md files + a media/ subfolder, "
                         "default) or 'fuma' (Fumadocs: content/docs/<topic>/ + "
                         "public/images/<topic>/ + meta.json). 'fuma' requires the LLM.")
-    p.add_argument("--model", default=default_model(),
+    p.add_argument("--model-name", dest="model", default=default_model(),
                    help="model id (default: $LLM_MODEL or the built-in default)")
+    p.add_argument("--model-endpoint", default=None,
+                   help="LLM API base URL (default: $LLM_BASE_URL or the built-in default)")
+    p.add_argument("--model-key", default=None,
+                   help="LLM API key (default: $LLM_API_KEY / $OPENROUTER_API_KEY)")
     p.add_argument("--no-merge", action="store_true", help="skip final merge step")
     p.add_argument("--keep-work", action="store_true",
                    help="keep the per-run render/<uuid> workspace (default: delete)")
@@ -808,6 +813,12 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     load_dotenv(ROOT_DIR / ".env")
     args = parse_args()
+
+    # CLI overrides win over env/.env; utility.base_url()/api_key() read these back.
+    if args.model_endpoint:
+        os.environ["LLM_BASE_URL"] = args.model_endpoint
+    if args.model_key:
+        os.environ["LLM_API_KEY"] = args.model_key
 
     fuma = args.layout == "fuma"
     key = api_key()
