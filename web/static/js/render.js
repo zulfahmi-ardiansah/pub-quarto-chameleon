@@ -7,6 +7,7 @@ const mobileProgress = document.getElementById("mobile-progress");
 const submitBtn = document.getElementById("submit-btn");
 const statusEl = document.getElementById("status");
 const loadingOverlay = document.getElementById("loading-overlay");
+const loadingSub = document.getElementById("loading-sub");
 
 const STEP_KEYS = { 1: "step.content", 2: "step.info", 3: "step.render", 4: "step.done" };
 // Inline SVG check — font-independent, so the "done" badge renders everywhere.
@@ -286,7 +287,7 @@ function setStatus(kind, html) {
 }
 function clearStatus() { statusEl.classList.add("hidden"); statusEl.innerHTML = ""; }
 
-function showLoading() { loadingOverlay.classList.remove("hidden"); document.body.classList.add("overflow-hidden"); }
+function showLoading() { loadingSub.textContent = t("loading.sub"); loadingOverlay.classList.remove("hidden"); document.body.classList.add("overflow-hidden"); }
 function hideLoading() { loadingOverlay.classList.add("hidden"); document.body.classList.remove("overflow-hidden"); }
 /* Keep the overlay up at least `ms` so a fast render reads as deliberate, not a flicker. */
 function holdLoading(startedAt, ms = 650) {

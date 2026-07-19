@@ -15,6 +15,7 @@
   const submitBtn = document.getElementById("rev-submit-btn");
   const statusEl = document.getElementById("rev-status");
   const loadingOverlay = document.getElementById("loading-overlay");
+  const loadingSub = document.getElementById("loading-sub");
 
   const CHECK_ICON = '<svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>';
   const STEP_KEYS = { 1: "rev.step.upload", 2: "rev.step.options", 3: "rev.step.review", 4: "rev.step.done" };
@@ -186,7 +187,11 @@
   }
   function clearStatus() { statusEl.classList.add("hidden"); statusEl.innerHTML = ""; }
 
-  function showLoading() { loadingOverlay.classList.remove("hidden"); document.body.classList.add("overflow-hidden"); }
+  function showLoading() {
+    loadingSub.textContent = t(useLlm.checked ? "loading.subReverseLlm" : "loading.subReverse");
+    loadingOverlay.classList.remove("hidden");
+    document.body.classList.add("overflow-hidden");
+  }
   function hideLoading() { loadingOverlay.classList.add("hidden"); document.body.classList.remove("overflow-hidden"); }
   function holdLoading(startedAt, ms = 650) {
     const left = ms - (Date.now() - startedAt);

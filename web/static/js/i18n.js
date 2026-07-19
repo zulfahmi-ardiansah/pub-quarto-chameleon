@@ -27,6 +27,8 @@ const I18N = {
 
     "loading.title": "Generating your document",
     "loading.sub": "Rendering with Quarto. This can take up to a minute.",
+    "loading.subReverse": "Converting your document. This can take more than a minute. Keep this tab open.",
+    "loading.subReverseLlm": "Converting with an LLM. This can take several minutes. Keep this tab open.",
     "success.title": "Your document is ready",
     "success.body": "Downloaded {file}. Check your downloads folder, or grab it again below.",
     "success.downloadAgain": "Download again",
@@ -169,6 +171,8 @@ const I18N = {
 
     "loading.title": "Membuat dokumen Anda",
     "loading.sub": "Merender dengan Quarto. Bisa memakan waktu hingga satu menit.",
+    "loading.subReverse": "Mengonversi dokumen Anda. Bisa lebih dari satu menit. Biarkan tab ini tetap terbuka.",
+    "loading.subReverseLlm": "Mengonversi dengan LLM. Bisa beberapa menit. Biarkan tab ini tetap terbuka.",
     "success.title": "Dokumen Anda sudah siap",
     "success.body": "Berkas {file} terunduh. Periksa folder unduhan Anda, atau ambil lagi di bawah.",
     "success.downloadAgain": "Unduh lagi",
