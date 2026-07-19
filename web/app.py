@@ -11,6 +11,7 @@ from pathlib import Path
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from paths import STATIC_DIR, TEMPLATE_DIR
+from reverse_service import reverse_document
 from service import RenderError, render_document
 from util import list_presets
 
@@ -55,6 +56,25 @@ def render():
     try:
         result = render_document(
             files, request.files.get("custom_template"), request.form, pasted)
+    except RenderError as exc:
+        payload = {"error": exc.message}
+        if exc.detail:
+            payload["detail"] = exc.detail
+        return jsonify(payload), exc.status
+
+    return send_file(
+        io.BytesIO(result.data),
+        mimetype=result.mimetype,
+        as_attachment=True,
+        download_name=result.download_name,
+    )
+
+
+@app.post("/reverse")
+def reverse():
+    """Convert an uploaded .docx into a zip of clean Markdown pages (+ media)."""
+    try:
+        result = reverse_document(request.files.get("docx"), request.form)
     except RenderError as exc:
         payload = {"error": exc.message}
         if exc.detail:

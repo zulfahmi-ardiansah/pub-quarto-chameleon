@@ -61,3 +61,18 @@ def package_output(docx_path: Path, image_dir: Path) -> tuple[bytes, str, str]:
         return buf.getvalue(), "application/zip", f"{docx_path.stem}.zip"
 
     return docx_path.read_bytes(), DOCX_MIMETYPE, docx_path.name
+
+
+def package_folder(root: Path, zip_stem: str) -> tuple[bytes, str, str]:
+    """Zip every file under *root* into memory, ready to send.
+
+    Arc names are kept relative to *root* (so the archive mirrors the folder tree),
+    and the download is named ``{zip_stem}.zip``. Reading into memory lets the caller
+    delete the job workspace immediately after. Used for the reverse pipeline output,
+    which is a whole page/media folder rather than a single file.
+    """
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for path in sorted(p for p in root.rglob("*") if p.is_file()):
+            zf.write(path, path.relative_to(root).as_posix())
+    return buf.getvalue(), "application/zip", f"{zip_stem}.zip"

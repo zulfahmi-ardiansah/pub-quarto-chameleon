@@ -237,7 +237,7 @@ bin\qlon.bat input.docx --use-llm
 |----------|-------------|
 | `input` (`.docx`) | The Word document to extract |
 | `--use-llm` | Run the LLM steps (segment / clean / structure / describe). Without it (or without a key), the run is a deterministic passthrough of the raw Quarto extraction |
-| `--layout flat\|fuma` | Output layout: `flat` (all `.md` + a `media/` subfolder, default) or `fuma` (Fumadocs: `content/docs/<topic>/` + `public/images/<topic>/` + `meta.json`). `fuma` requires the LLM |
+| `--layout flat\|fuma` | Output layout: `flat` (all `.md` + a `media/` subfolder, default) or `fuma` (Fumadocs: `content/docs/<topic>/` + `public/images/<topic>/` + `meta.json`). `fuma` requires the LLM. Only `fuma` pages carry YAML front matter (`title`, `description`, …) and drop the redundant `# <title>` heading; `flat` pages have no front matter and keep the H1 |
 | `--model-name <id>` | Model id (default: `$LLM_MODEL` or the built-in default) |
 | `--model-endpoint <url>` | LLM API base URL (default: `$LLM_BASE_URL` or the built-in default) |
 | `--model-key <key>` | LLM API key (default: `$LLM_API_KEY` / `$OPENROUTER_API_KEY`) |

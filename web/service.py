@@ -63,21 +63,27 @@ def _resolve_template_args(custom_upload, preset: str, job_dir: Path) -> list[st
     return []
 
 
-def _run_cli(job_dir: Path, cli_args: list[str]) -> None:
-    """Run the CLI render with *job_dir* as cwd, so outputs land inside it."""
+def run_pipeline(job_dir: Path, args: list[str], timeout: int = RENDER_TIMEOUT) -> None:
+    """Run the CLI (``main.py``) with *job_dir* as cwd, so outputs land inside it.
+
+    *args* is the full positional+flag list handed to the entry point (a ``.docx``
+    positional routes to the reverse pipeline; ``config.yml`` to the render one).
+    Raises :class:`RenderError` on timeout or a non-zero exit, carrying the captured
+    output as detail. Shared by both the render and reverse services.
+    """
     try:
         proc = subprocess.run(
-            [sys.executable, str(MAIN_SCRIPT), "config.yml", *cli_args],
+            [sys.executable, str(MAIN_SCRIPT), *args],
             cwd=job_dir,
             capture_output=True,
             text=True,
-            timeout=RENDER_TIMEOUT,
+            timeout=timeout,
         )
     except subprocess.TimeoutExpired:
-        raise RenderError(f"Render timed out after {RENDER_TIMEOUT}s.", status=504)
+        raise RenderError(f"Processing timed out after {timeout}s.", status=504)
     if proc.returncode != 0:
-        detail = (proc.stderr or proc.stdout or "Render failed with no output.").strip()
-        raise RenderError("Render failed.", status=500, detail=detail[-4000:])
+        detail = (proc.stderr or proc.stdout or "Pipeline failed with no output.").strip()
+        raise RenderError("Processing failed.", status=500, detail=detail[-4000:])
 
 
 def render_document(files, custom_upload, form, pasted: str) -> RenderResult:
@@ -104,7 +110,7 @@ def render_document(files, custom_upload, form, pasted: str) -> RenderResult:
         (job_dir / "config.yml").write_text(
             yaml.safe_dump(config, sort_keys=False, allow_unicode=True), encoding="utf-8")
 
-        _run_cli(job_dir, cli_args)
+        run_pipeline(job_dir, ["config.yml", *cli_args])
 
         docx_files = sorted(job_dir.glob("*.docx"))
         if not docx_files:
