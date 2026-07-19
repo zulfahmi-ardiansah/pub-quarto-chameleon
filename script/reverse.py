@@ -466,6 +466,10 @@ def write_manifest(sections: list[Section], path: Path) -> None:
 
 HEADING_PREFIX_RE = re.compile(r"^(#{1,6})(\s+.*)$")  # keeps whitespace after the hashes
 _IMG_RE = re.compile(r"(!\[[^\]]*\]\()([^)\s]+)(\))(\{[^}]*\})?")
+# A fragment-only link: [text](#anchor). Leading '!' marks an image -> skip.
+_ANCHOR_LINK_RE = re.compile(r"(!?)\[([^\]]*)\]\(#([^)\s]+)\)")
+# Inline markdown to strip before deriving a heading id (pandoc drops formatting).
+_INLINE_LINK_RE = re.compile(r"\[([^\]]*)\]\([^)]*\)")
 
 @dataclass
 class PageGroup:
@@ -529,6 +533,31 @@ def _parse_descriptions(content: str, expected: int) -> list[str]:
     ):
         return descriptions
     raise ValueError(f"bad shape: expected {expected} strings")
+
+
+def heading_id(text: str) -> str:
+    """Pandoc-style auto identifier for a heading, matching Pandoc's cross-ref ids.
+
+    Strips inline formatting, drops disallowed punctuation, lowercases, joins words
+    with hyphens, and removes any leading non-letters (so "1. Overview" -> "overview").
+    Falls back to "section" when nothing is left. Must mirror the ids Pandoc emitted
+    in the source's link anchors so the two line up.
+    """
+    stripped = _INLINE_LINK_RE.sub(r"\1", text)          # [t](u) -> t
+    stripped = stripped.replace("`", "").replace("*", "")  # code / emphasis markers
+    kept = [
+        ch.lower() if (ch.isalnum() or ch in "_-.") else " " if ch.isspace() else ""
+        for ch in stripped
+    ]
+    # Drop pure-punctuation tokens (e.g. a "---" standing in for an em dash, which
+    # Pandoc removes) so runs of separators don't leak into the id.
+    tokens = [t for t in "".join(kept).split() if any(c.isalnum() for c in t)]
+    ident = "-".join(tokens)
+    i = 0
+    while i < len(ident) and not ident[i].isalpha():
+        i += 1
+    return ident[i:] or "section"
+
 
 # --- Step Method ---
 
@@ -779,6 +808,68 @@ def reclaim_images(
     return len(copied), missing
 
 
+def _page_anchor_index(pages: list[Path]) -> dict[str, str]:
+    """Map every heading's id -> the page filename that contains it (flat layout).
+
+    Ids are derived with `heading_id`, matching the anchors Pandoc put in the source
+    links. Duplicate ids are suffixed `-1`, `-2`, ... like Pandoc, so links to a
+    repeated heading still resolve. Fenced code blocks are skipped.
+    """
+    index: dict[str, str] = {}
+    seen: dict[str, int] = {}
+    for page in pages:
+        in_fence = False
+        for line in page.read_text(encoding="utf-8").splitlines():
+            if FENCE_RE.match(line):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            m = HEADING_RE.match(line)
+            if not m:
+                continue
+            base = heading_id(m.group(2))
+            n = seen.get(base, 0)
+            seen[base] = n + 1
+            anchor = base if n == 0 else f"{base}-{n}"
+            index[anchor] = page.name
+    return index
+
+
+def link_pages(pages: list[Path]) -> tuple[int, list[str]]:
+    """Point cross-file fragment links at the page that owns the target heading.
+
+    For each `[text](#anchor)`, if the heading lives on another page rewrite it to
+    `[text](that-page.md#anchor)`; same-page links and image links are left alone.
+    Anchors with no matching heading are left unchanged and collected for reporting.
+    Returns (rewritten_count, unresolved_anchor_list).
+    """
+    index = _page_anchor_index(pages)
+    rewritten = 0
+    unresolved: list[str] = []
+
+    for page in pages:
+        def repl(m: re.Match) -> str:
+            nonlocal rewritten
+            bang, text, anchor = m.group(1), m.group(2), m.group(3)
+            if bang:                       # image, not a link
+                return m.group(0)
+            target = index.get(anchor)
+            if target is None:
+                unresolved.append(anchor)
+                return m.group(0)
+            if target == page.name:        # same page: bare fragment already works
+                return m.group(0)
+            rewritten += 1
+            return f"[{text}]({target}#{anchor})"
+
+        text = page.read_text(encoding="utf-8")
+        new_text = _ANCHOR_LINK_RE.sub(repl, text)
+        if new_text != text:
+            page.write_text(new_text, encoding="utf-8")
+    return rewritten, unresolved
+
+
 # ==========================================
 # ENTRYPOINT
 # ==========================================
@@ -959,6 +1050,18 @@ def main() -> int:
             fixed = sum(fix_file_headings(p) for p in written)
             if fixed:
                 print(f"Heading levels clamped in {fixed} file(s).")
+
+            # Flat layout: each page is a standalone file, so cross-page anchor links
+            # must name the target file. 'fuma' resolves #anchor within one route, so
+            # its links are left as-is.
+            if not fuma:
+                rewritten, unresolved = link_pages(written)
+                print(f"Cross-file links: {rewritten} rewritten")
+                if unresolved:
+                    uniq = sorted(set(unresolved))
+                    print(f"  ! {len(uniq)} anchor(s) not matched to any page, "
+                          f"left as-is: {uniq[:10]}{' ...' if len(uniq) > 10 else ''}",
+                          file=sys.stderr)
 
             copied = 0
             missing: list[str] = []
