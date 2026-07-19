@@ -732,6 +732,22 @@ def drop_toc_page(
     return kept, kept_desc, dropped
 
 
+def _strip_leading_h1(body: str) -> str:
+    """Drop a leading `# ` heading (and the blank line after it) from `body`.
+
+    Only a level-1 heading is removed; `## ` and deeper are left untouched.
+    """
+    lines = body.split("\n")
+    i = 0
+    while i < len(lines) and not lines[i].strip():
+        i += 1
+    if i < len(lines) and lines[i].startswith("# "):
+        del lines[i]
+        while i < len(lines) and not lines[i].strip():
+            del lines[i]
+    return "\n".join(lines)
+
+
 def split_by_h1(
     target_dir: Path,
     groups: list[PageGroup],
@@ -739,6 +755,7 @@ def split_by_h1(
     descriptions: list[str] | None = None,
     write_meta: bool = True,
     index_page: bool = True,
+    emit_front_matter: bool = True,
 ) -> list[Path]:
     """Write `groups` as numbered `xx-slug.md` pages, plus (when `write_meta`)
     `meta.json`, following the docs-site standard.
@@ -749,22 +766,28 @@ def split_by_h1(
     its own title and no dedicated index is written -- used when `--skip-toc`
     removes the table-of-contents page.
 
-    Each file starts with YAML front matter (title, optional description from
-    `descriptions` -- same order/length as `groups` -- plus `front_matter_extra`)
-    followed by a body that always opens with `# <title>`. `meta.json` lists the
-    pages in order for the sidebar (Fumadocs-specific; skipped for a flat layout).
-    Returns the written paths in order.
+    When `emit_front_matter` (the Fumadocs layout), each file starts with a YAML
+    front matter block (title, optional description from `descriptions` -- same
+    order/length as `groups` -- plus `front_matter_extra`); the redundant leading
+    `# <title>` is dropped from the body since the title already lives in the front
+    matter. Otherwise (the flat layout) no front matter is written and the body
+    opens with `# <title>`. `meta.json` lists the pages in order for the sidebar
+    (Fumadocs-specific; skipped for a flat layout). Returns the written paths in order.
     """
     target_dir.mkdir(parents=True, exist_ok=True)
     written: list[Path] = []
 
     def _write(path: Path, group: PageGroup, description: str | None) -> None:
-        fm = {"title": group.title, "description": description,
-              **(front_matter_extra or {})}
         body = "\n\n".join(p for p in group.parts if p.strip())
-        if not body.lstrip().startswith("# "):
-            body = f"# {group.title}\n\n{body}" if body else f"# {group.title}"
-        path.write_text(_yaml_front_matter(fm) + body + "\n", encoding="utf-8")
+        if emit_front_matter:
+            fm = {"title": group.title, "description": description,
+                  **(front_matter_extra or {})}
+            body = _strip_leading_h1(body)
+            path.write_text(_yaml_front_matter(fm) + body + "\n", encoding="utf-8")
+        else:
+            if not body.lstrip().startswith("# "):
+                body = f"# {group.title}\n\n{body}" if body else f"# {group.title}"
+            path.write_text(body + "\n", encoding="utf-8")
         written.append(path)
 
     descriptions = descriptions or []
@@ -788,17 +811,19 @@ def split_by_h1(
     return written
 
 
-def fix_file_headings(path: Path) -> bool:
+def fix_file_headings(path: Path, start_level: int = 0) -> bool:
     """Clamp heading-level jumps inside one final file (fence-aware).
 
-    The body opens with H1; every later heading may be at most one level deeper
-    than the previous one (H1 -> H3 becomes H1 -> H2). Per-file safety net on top
-    of the global normalization, since grouping/reordering can reintroduce jumps.
-    Returns True if the file was rewritten.
+    Every heading may be at most one level deeper than the previous one
+    (H1 -> H3 becomes H1 -> H2). `start_level` seeds the previous depth: 0 for a
+    flat page whose body opens with its own H1, or 1 for a Fumadocs page whose H1
+    title lives in the front matter (so a leading H2 is allowed, not promoted).
+    Per-file safety net on top of the global normalization, since grouping/reordering
+    can reintroduce jumps. Returns True if the file was rewritten.
     """
     lines = path.read_text(encoding="utf-8").splitlines()
     in_fence = False
-    prev = 0
+    prev = start_level
     changed = False
     for i, line in enumerate(lines):
         if FENCE_RE.match(line):
@@ -1108,9 +1133,10 @@ def main() -> int:
                 descriptions=descriptions,
                 write_meta=fuma,
                 index_page=index_page,
+                emit_front_matter=fuma,
             )
 
-            fixed = sum(fix_file_headings(p) for p in written)
+            fixed = sum(fix_file_headings(p, start_level=1 if fuma else 0) for p in written)
             if fixed:
                 print(f"Heading levels clamped in {fixed} file(s).")
 
