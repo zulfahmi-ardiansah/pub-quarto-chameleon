@@ -17,8 +17,8 @@ import sys
 # not be mistaken for the positional input. Covers both pipelines' value-flags so
 # e.g. `--custom template.docx` never routes to the reverse path by its value.
 _VALUE_FLAGS = frozenset({
-    "--layout", "--model-name", "--model-endpoint", "--model-key",  # reverse
-    "--preset", "--custom",                                         # render
+    "--layout", "--model-name", "--model-endpoint", "--model-key", "--skip-toc",  # reverse
+    "--preset", "--custom",                                                       # render
 })
 
 # Combined help. Hand-maintained: keep in sync with reverse.parse_args and
@@ -47,6 +47,7 @@ reverse options  (docx -> Markdown pages, output to ./<input name>/):
   --model-endpoint URL LLM API base URL ($LLM_BASE_URL or the built-in default)
   --model-key KEY      LLM API key ($LLM_API_KEY / $OPENROUTER_API_KEY)
   --no-merge           skip the final merge step
+  --skip-toc HEADING   drop the page whose first heading is HEADING (the TOC page)
   --allow-reorder      apply the LLM's suggested section reorder
   --keep-work          keep the per-run render/<uuid> scratch folder
 

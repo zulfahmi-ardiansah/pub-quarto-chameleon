@@ -242,6 +242,7 @@ bin\qlon.bat input.docx --use-llm
 | `--model-endpoint <url>` | LLM API base URL (default: `$LLM_BASE_URL` or the built-in default) |
 | `--model-key <key>` | LLM API key (default: `$LLM_API_KEY` / `$OPENROUTER_API_KEY`) |
 | `--no-merge` | Skip the final merge step |
+| `--skip-toc <heading>` | Drop the page whose first heading equals `<heading>` (the table-of-contents page). Remaining pages are renumbered from `00-` and no index page is written |
 | `--allow-reorder` | Apply the LLM's suggested section reorder, if any |
 | `--keep-work` | Keep the per-run `render/<uuid>` scratch folder |
 

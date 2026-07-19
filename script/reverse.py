@@ -559,6 +559,20 @@ def heading_id(text: str) -> str:
     return ident[i:] or "section"
 
 
+def _group_heading(group: PageGroup) -> str:
+    """The first `# ...` heading text in a group's body, else its title.
+
+    Used to match `--skip-toc`: the index group's title is the doc title, but its
+    body may open with the TOC heading (e.g. 'Daftar Isi'), so we match on the body.
+    """
+    for part in group.parts:
+        for line in part.splitlines():
+            m = HEADING_RE.match(line)
+            if m:
+                return m.group(2).strip()
+    return group.title
+
+
 # --- Step Method ---
 
 def evaluate_structure(
@@ -694,21 +708,51 @@ def describe_pages(
     return _parse_descriptions(content, len(pages))
 
 
+def drop_toc_page(
+    groups: list[PageGroup],
+    descriptions: list[str] | None,
+    heading: str,
+) -> tuple[list[PageGroup], list[str] | None, bool]:
+    """Remove the first group whose heading equals `heading` (case-insensitive).
+
+    Keeps `descriptions` aligned with the surviving groups. Returns
+    (groups, descriptions, dropped) where `dropped` is False if nothing matched.
+    """
+    key = heading.strip().casefold()
+    kept: list[PageGroup] = []
+    kept_desc: list[str] | None = None if descriptions is None else []
+    dropped = False
+    for i, group in enumerate(groups):
+        if not dropped and _group_heading(group).strip().casefold() == key:
+            dropped = True
+            continue
+        kept.append(group)
+        if kept_desc is not None:
+            kept_desc.append(descriptions[i] if i < len(descriptions) else "")
+    return kept, kept_desc, dropped
+
+
 def split_by_h1(
     target_dir: Path,
     groups: list[PageGroup],
     front_matter_extra: dict[str, str | None] | None = None,
     descriptions: list[str] | None = None,
     write_meta: bool = True,
+    index_page: bool = True,
 ) -> list[Path]:
-    """Write `groups` as `00-index.md` + one numbered `xx-slug.md` per H1 page,
-    plus (when `write_meta`) `meta.json`, following the docs-site standard.
+    """Write `groups` as numbered `xx-slug.md` pages, plus (when `write_meta`)
+    `meta.json`, following the docs-site standard.
+
+    With `index_page` (default), the first group is written as `00-index.md` (the
+    landing page, kept even when empty) and the rest as `01-slug.md`, ... . With
+    `index_page=False` every group is numbered `00-slug.md`, `01-slug.md`, ... by
+    its own title and no dedicated index is written -- used when `--skip-toc`
+    removes the table-of-contents page.
 
     Each file starts with YAML front matter (title, optional description from
     `descriptions` -- same order/length as `groups` -- plus `front_matter_extra`)
-    followed by a body that always opens with `# <title>`. An empty index page is
-    still written: every folder needs a landing page. `meta.json` lists the pages
-    in order for the sidebar (Fumadocs-specific; skipped for a flat layout).
+    followed by a body that always opens with `# <title>`. `meta.json` lists the
+    pages in order for the sidebar (Fumadocs-specific; skipped for a flat layout).
     Returns the written paths in order.
     """
     target_dir.mkdir(parents=True, exist_ok=True)
@@ -728,11 +772,15 @@ def split_by_h1(
     def _desc(i: int) -> str | None:
         return descriptions[i] if i < len(descriptions) else None
 
-    _write(target_dir / "00-index.md", groups[0], _desc(0))
-    for n, group in enumerate(groups[1:], start=1):
-        _write(target_dir / f"{n:02d}-{slugify(group.title)}.md", group, _desc(n))
+    if index_page:
+        _write(target_dir / "00-index.md", groups[0], _desc(0))
+        for n, group in enumerate(groups[1:], start=1):
+            _write(target_dir / f"{n:02d}-{slugify(group.title)}.md", group, _desc(n))
+    else:
+        for n, group in enumerate(groups):
+            _write(target_dir / f"{n:02d}-{slugify(group.title)}.md", group, _desc(n))
 
-    if write_meta:
+    if write_meta and groups:
         meta = {"title": groups[0].title,
                 "pages": [p.stem for p in written]}
         (target_dir / "meta.json").write_text(
@@ -890,6 +938,9 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--model-key", default=None,
                    help="LLM API key (default: $LLM_API_KEY / $OPENROUTER_API_KEY)")
     p.add_argument("--no-merge", action="store_true", help="skip final merge step")
+    p.add_argument("--skip-toc", metavar="HEADING", default=None,
+                   help="drop the page whose first heading equals HEADING (the table-of-"
+                        "contents page); remaining pages are renumbered with no index")
     p.add_argument("--keep-work", action="store_true",
                    help="keep the per-run render/<uuid> workspace (default: delete)")
     p.add_argument("--allow-reorder", action="store_true",
@@ -1037,6 +1088,17 @@ def main() -> int:
                                      doc_title=input_path.stem)
                 descriptions = None
 
+            index_page = True
+            if args.skip_toc:
+                groups, descriptions, dropped = drop_toc_page(
+                    groups, descriptions, args.skip_toc)
+                if dropped:
+                    index_page = False  # no forced landing page once the TOC is removed
+                    print(f"Skipped TOC page: {args.skip_toc!r} (pages renumbered, no index)")
+                else:
+                    print(f"  ! --skip-toc {args.skip_toc!r} matched no page heading; "
+                          "nothing skipped", file=sys.stderr)
+
             written = split_by_h1(
                 pages_dir, groups,
                 front_matter_extra={
@@ -1045,6 +1107,7 @@ def main() -> int:
                 },
                 descriptions=descriptions,
                 write_meta=fuma,
+                index_page=index_page,
             )
 
             fixed = sum(fix_file_headings(p) for p in written)
