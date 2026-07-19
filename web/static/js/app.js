@@ -179,7 +179,8 @@ document.getElementById("paste-clipboard").addEventListener("click", async () =>
 const fileInput = form.querySelector('input[name="files"]');
 const dropzone = document.getElementById("dropzone");
 const fileList = document.getElementById("file-list");
-const ALLOWED = /\.(md|qmd)$/i;
+const ALLOWED = /\.(md|qmd|zip)$/i;
+const isZip = (f) => /\.zip$/i.test(f.name);
 
 function syncInputFiles(files) {
   const dt = new DataTransfer();
@@ -187,10 +188,15 @@ function syncInputFiles(files) {
   fileInput.files = dt.files;
 }
 function addFiles(incoming) {
-  const existing = [...fileInput.files];
+  const accepted = [...incoming].filter((f) => ALLOWED.test(f.name));
+  // A project zip supersedes everything — zip and loose md are mutually exclusive.
+  const zip = accepted.find(isZip);
+  if (zip) { syncInputFiles([zip]); refreshFileList(); return; }
+  // Adding loose md drops any previously selected zip.
+  const existing = [...fileInput.files].filter((f) => !isZip(f));
   const names = new Set(existing.map((f) => f.name));
-  [...incoming].forEach((f) => {
-    if (ALLOWED.test(f.name) && !names.has(f.name)) { existing.push(f); names.add(f.name); }
+  accepted.forEach((f) => {
+    if (!names.has(f.name)) { existing.push(f); names.add(f.name); }
   });
   syncInputFiles(existing.sort((a, b) => a.name.localeCompare(b.name)));
   refreshFileList();
@@ -204,8 +210,10 @@ function refreshFileList() {
   fileList.innerHTML = files.map((f, i) => `
     <li class="flex items-center justify-between rounded-lg border border-gray-200 bg-white px-3 py-2 dark:border-ink-800 dark:bg-ink-900">
       <span class="flex min-w-0 items-center gap-2">
-        <span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary-100 text-xs font-semibold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">${i + 1}</span>
-        <span class="truncate text-gray-700 dark:text-gray-200">${escapeHtml(f.name)}</span>
+        ${isZip(f)
+          ? `<span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-700 dark:bg-primary-900/40 dark:text-primary-300"><svg class="h-3.5 w-3.5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/></svg></span>`
+          : `<span class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded bg-primary-100 text-xs font-semibold text-primary-700 dark:bg-primary-900/40 dark:text-primary-300">${i + 1}</span>`}
+        <span class="truncate text-gray-700 dark:text-gray-200">${escapeHtml(f.name)}${isZip(f) ? ` <span class="text-xs text-gray-400 dark:text-gray-500">${escapeHtml(t("upload.zipTag"))}</span>` : ""}</span>
       </span>
       <button type="button" class="file-remove ml-3 shrink-0 text-gray-400 transition hover:text-red-600" data-name="${escapeHtml(f.name)}" aria-label="${escapeHtml(t("upload.remove"))}">
         <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/></svg>
@@ -259,7 +267,12 @@ document.addEventListener("keydown", (e) => {
 
 function buildSummary() {
   const get = (name) => form.querySelector(`[name="${name}"]`)?.value.trim() || "—";
-  const contentDesc = mode === "paste" ? t("sum.contentPaste") : t("sum.contentFiles", { n: fileInput.files.length });
+  const upFiles = [...fileInput.files];
+  const contentDesc = mode === "paste"
+    ? t("sum.contentPaste")
+    : (upFiles.length === 1 && isZip(upFiles[0])
+        ? t("sum.contentZip", { name: upFiles[0].name })
+        : t("sum.contentFiles", { n: upFiles.length }));
   const custom = form.querySelector('input[name="custom_template"]').files[0];
   const preset = get("preset");
   const tplDesc = custom ? t("sum.templateCustom", { name: custom.name })

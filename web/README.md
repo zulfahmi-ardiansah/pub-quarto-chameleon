@@ -3,7 +3,11 @@
 A browser front-end for Qlon, built as a 3-step wizard (Flowbite + Tailwind):
 
 1. **Content** — paste Markdown (e.g. an AI response) for a single document, *or*
-   upload one or more `.md`/`.qmd` files (each becomes a chapter, ordered by filename).
+   upload one or more `.md`/`.qmd` files (each becomes a chapter, ordered by filename),
+   *or* drop a single `.zip` project bundling your chapter Markdown plus its referenced
+   images (e.g. an `images/` folder). The zip is unpacked server-side: chapter md is
+   collected from any depth, a single wrapper folder is stripped, and relative image
+   refs resolve automatically. Zip and loose-file uploads are mutually exclusive.
    The paste editor has a **Paste from clipboard** button and a **Preview** button that
    opens the rendered Markdown in a modal, plus a help link showing how to copy a
    response from ChatGPT, Claude, Gemini, or Perplexity (screenshots in `static/`).

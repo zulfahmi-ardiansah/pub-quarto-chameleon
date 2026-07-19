@@ -22,6 +22,8 @@ import yaml
 from flask import Flask, abort, jsonify, render_template, request, send_file
 from werkzeug.utils import secure_filename
 
+from zip_intake import ZipIntakeError, stage_zip
+
 ROOT_DIR = Path(__file__).resolve().parent.parent
 MAIN_SCRIPT = ROOT_DIR / "script" / "main.py"
 TEMPLATE_DIR = ROOT_DIR / "template"
@@ -112,7 +114,19 @@ def render():
     try:
         # Stage content. Uploaded files take precedence; otherwise the pasted markdown
         # becomes a single chapter. Filename order = chapter order (sorted alphabetically).
-        if files:
+        # A single .zip is a project archive: chapter md + referenced images unpacked
+        # via stage_zip. Zip and loose md are mutually exclusive.
+        zips = [f for f in files if Path(f.filename).suffix.lower() == ".zip"]
+        if zips:
+            if len(files) > 1:
+                return jsonify(error="Upload a project .zip on its own, not mixed with other files."), 400
+            archive = job_dir / secure_filename(zips[0].filename)
+            zips[0].save(archive)
+            try:
+                stage_zip(archive, content_dir)
+            except ZipIntakeError as exc:
+                return jsonify(error=str(exc)), 400
+        elif files:
             for f in files:
                 name = secure_filename(f.filename)
                 if Path(name).suffix.lower() not in ALLOWED_CONTENT:

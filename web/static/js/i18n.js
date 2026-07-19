@@ -52,8 +52,9 @@ const I18N = {
     "help.other": "Using a different tool? It works the same way!",
 
     "upload.dropTitle": "Drag & drop files here",
-    "upload.dropHint": "or click to browse .md / .qmd, each file becomes a chapter",
+    "upload.dropHint": "or click to browse .md / .qmd (each file becomes a chapter), or a .zip project with images",
     "upload.remove": "Remove",
+    "upload.zipTag": "project archive",
 
     "legend.cover": "Cover",
     "legend.header": "Header & TOC",
@@ -82,6 +83,7 @@ const I18N = {
     "sum.template": "Template",
     "sum.contentPaste": "Pasted Markdown (single document)",
     "sum.contentFiles": "{n} uploaded file(s)",
+    "sum.contentZip": "Project archive ({name})",
     "sum.templateDefault": "Default (basic)",
     "sum.templateCustom": "Custom: {name}",
 
@@ -141,8 +143,9 @@ const I18N = {
     "help.other": "Pakai alat lain? Caranya sama!",
 
     "upload.dropTitle": "Seret & lepas berkas di sini",
-    "upload.dropHint": "atau klik untuk memilih .md / .qmd, tiap berkas menjadi satu bab",
+    "upload.dropHint": "atau klik untuk memilih .md / .qmd (tiap berkas menjadi satu bab), atau proyek .zip beserta gambar",
     "upload.remove": "Hapus",
+    "upload.zipTag": "arsip proyek",
 
     "legend.cover": "Sampul",
     "legend.header": "Header & Daftar isi",
@@ -171,6 +174,7 @@ const I18N = {
     "sum.template": "Templat",
     "sum.contentPaste": "Markdown ditempel (satu dokumen)",
     "sum.contentFiles": "{n} berkas diunggah",
+    "sum.contentZip": "Arsip proyek ({name})",
     "sum.templateDefault": "Bawaan (basic)",
     "sum.templateCustom": "Kustom: {name}",
 
