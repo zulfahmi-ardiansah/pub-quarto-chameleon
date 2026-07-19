@@ -22,7 +22,10 @@ from datetime import date
 from pathlib import Path
 
 import httpx
-from tqdm import tqdm
+from rich.console import Console
+from rich.panel import Panel
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn
+from rich.text import Text
 
 from utility import (
     DEFAULT_MODEL,
@@ -43,6 +46,15 @@ from prompt import (  # noqa: E402  (path is set up just above)
     DESCRIBE_PROMPT,
     SEGMENT_PROMPT,
 )
+
+# Shared console so diagnostic lines render cleanly above the live progress bar.
+_console = Console()
+
+
+def _info(msg: str) -> None:
+    """Print a diagnostic line through the shared console (markup/highlight off so
+    arbitrary content -- reprs, brackets, lists -- is shown verbatim, never parsed)."""
+    _console.print(msg, markup=False, highlight=False)
 
 
 # ==========================================
@@ -309,7 +321,7 @@ def segment_with_llm(markdown: str, client, api_key: str, model: str) -> str:
             validate=_validate,
         )
     except LLMError as e:
-        print(f"  ! segmentation failed, keeping one chunk: {e}")
+        _info(f"  ! segmentation failed, keeping one chunk: {e}")
         return markdown
 
     sections = json.loads(content)["sections"]
@@ -325,7 +337,7 @@ def segment_with_llm(markdown: str, client, api_key: str, model: str) -> str:
             continue
         pos = _find_anchor(markdown, cursor, entry["anchor"].split())
         if pos is None:
-            print(f"  ! anchor not found, skipping heading: {heading!r}")
+            _info(f"  ! anchor not found, skipping heading: {heading!r}")
             continue
         # The inline source title lands either at the end of the preceding slice or
         # the start of the body; strip both so it isn't duplicated beside the heading.
@@ -368,7 +380,7 @@ def derive_chunks(text: str, client, api_key: str, model: str,
             text = segmented
             chunks = split_into_chunks(text)
 
-    print(
+    _info(
         f"Boundaries: {len(chunks)} chunk(s) "
         f"(real={real_headings}, promoted={promoted}, llm_segmented={used_llm})"
     )
@@ -599,7 +611,7 @@ def evaluate_structure(
     }
 
     def _log_retry(attempt: int, err: Exception) -> None:
-        print(f"  ! structure evaluation attempt {attempt + 1} failed, retrying: {err}")
+        _info(f"  ! structure evaluation attempt {attempt + 1} failed, retrying: {err}")
 
     try:
         content = chat_completion(
@@ -616,7 +628,7 @@ def evaluate_structure(
             on_retry=_log_retry,
         )
     except LLMError as e:
-        print(f"  ! structure evaluation failed, keeping original outline: {e}")
+        _info(f"  ! structure evaluation failed, keeping original outline: {e}")
         return fallback
 
     result = json.loads(content)
@@ -703,7 +715,7 @@ def describe_pages(
             validate=lambda c: _parse_descriptions(c, len(pages)),
         )
     except LLMError as e:
-        print(f"  ! page descriptions failed, using first summaries: {e}")
+        _info(f"  ! page descriptions failed, using first summaries: {e}")
         return fallback
     return _parse_descriptions(content, len(pages))
 
@@ -1023,154 +1035,212 @@ def main() -> int:
         images_dir = target_dir / "media"
         image_link_prefix = "media"
 
+    # Banner + progress bar mirror render.py's rich UI.
+    header_text = Text()
+    header_text.append(input_path.name, style="bold white")
+    header_text.append(f"\nLayout: {args.layout}", style="dim white")
+    header_text.append(
+        f"\nLLM: {'on (' + args.model + ')' if use_llm else 'off -- raw passthrough'}",
+        style="dim white" if use_llm else "italic dim",
+    )
+    _console.print(Panel(header_text, title="[bold cyan]Qlon reverse[/bold cyan]",
+                         border_style="cyan", padding=(0, 2)))
+
+    progress_columns = (
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        BarColumn(),
+        TaskProgressColumn(),
+    )
+    # segment + clean are always run; extract is docx-only; merge adds assemble + finalize.
+    is_docx = input_path.suffix.lower() == ".docx"
+    total_steps = 2 + (1 if is_docx else 0) + (0 if args.no_merge else 2)
+
     failures = 0
+    written: list[Path] = []
+    copied = 0
     try:
-        # Step 1: .docx input -> extract to Markdown in a scratch subfolder first.
-        if input_path.suffix.lower() == ".docx":
-            print(f"Extracting {input_path.name} -> Markdown (quarto pandoc)")
-            try:
-                input_path = extract_docx(input_path, work_dir / "extract")
-            except ExtractError as e:
-                print(f"ERROR: {e}", file=sys.stderr)
-                return 1
+        with Progress(*progress_columns, console=_console) as progress:
+            task = progress.add_task("Starting reverse pipeline...", total=total_steps)
 
-        text = input_path.read_text(encoding="utf-8")
-        print(f"Model: {args.model}" if use_llm
-              else "LLM disabled -- raw quarto passthrough (pass --use-llm to enable)")
+            # Step: .docx input -> extract to Markdown in a scratch subfolder first.
+            if is_docx:
+                progress.update(task, description=f"Extracting {input_path.name} -> Markdown (quarto pandoc)...")
+                try:
+                    input_path = extract_docx(input_path, work_dir / "extract")
+                except ExtractError as e:
+                    _console.print(f"ERROR: {e}", style="red", markup=False, highlight=False)
+                    return 1
+                progress.advance(task)
 
-        sections = []
-        summaries: dict[int, str] = {}
-        manifest_path = work_dir / "structure.json"
+            text = input_path.read_text(encoding="utf-8")
+            _info(f"Model: {args.model}" if use_llm
+                  else "LLM disabled -- raw quarto passthrough (pass --use-llm to enable)")
 
-        if use_llm:
-            with httpx.Client() as client:
-                chunks = derive_chunks(text, client, key, args.model)
-                print(f"Work scratch: {work_dir}")
-                for i, chunk in enumerate(tqdm(chunks, desc="cleaning", unit="chunk")):
-                    try:
-                        # Heading-only chunk: nothing to clean; calling the LLM here
-                        # invites hallucinated filler. Pass through untouched.
-                        body = chunk.text.split("\n", 1)[1] if "\n" in chunk.text else ""
-                        if chunk.level >= 1 and not body.strip():
-                            cleaned, summary = chunk.text, ""
-                        else:
-                            cleaned, summary = clean_chunk(chunk, client, key, model=args.model)
-                    except CleanerError as e:
-                        tqdm.write(f"  ! chunk {chunk.index} ({chunk.slug}) failed: {e}")
-                        cleaned, summary = chunk.text, ""  # fall back to raw so nothing is lost
-                        failures += 1
-                    if summary:
-                        summaries[chunk.index] = summary
-                    (work_dir / f"{chunk.slug}.md").write_text(cleaned + "\n", encoding="utf-8")
-                    sections = build_manifest(chunks[: i + 1], summaries)
-                    write_manifest(sections, manifest_path)
-        else:
-            chunks = derive_chunks(text, None, None, args.model, allow_llm=False)
-            print(f"Work scratch: {work_dir}")
-            for chunk in chunks:
-                (work_dir / f"{chunk.slug}.md").write_text(chunk.text + "\n", encoding="utf-8")
-            sections = build_manifest(chunks, summaries)
-            write_manifest(sections, manifest_path)
+            sections = []
+            summaries: dict[int, str] = {}
+            manifest_path = work_dir / "structure.json"
 
-        if not args.no_merge:
+            # Step: segment. Step: clean (per-chunk sub-bar).
             if use_llm:
                 with httpx.Client() as client:
-                    evaluated = evaluate_structure(sections, client, key, args.model)
-                    (work_dir / "structure.eval.json").write_text(
-                        json.dumps(evaluated, indent=2, ensure_ascii=False), encoding="utf-8")
+                    progress.update(task, description="Deriving document structure...")
+                    chunks = derive_chunks(text, client, key, args.model)
+                    progress.advance(task)
+                    _info(f"Work scratch: {work_dir}")
 
-                    order = None
-                    suggested = evaluated.get("suggested_order")
-                    if suggested:
-                        reason = evaluated.get("reorder_reason") or "(no reason given)"
-                        if args.allow_reorder:
-                            order = suggested
-                            print(f"Applying suggested reorder: {reason}")
-                        else:
-                            print(f"NOTE: LLM suggests reordering sections -> {suggested}\n"
-                                  f"      reason: {reason}\n"
-                                  f"      keeping source order; rerun with --allow-reorder to apply.")
-
-                    normalize_levels(evaluated["sections"])
-
-                    groups = group_by_h1(work_dir, evaluated["sections"], order,
-                                         doc_title=evaluated.get("title") or input_path.stem)
-
-                    pages_payload = [
-                        {"title": g.title,
-                         "summaries": [summaries[i] for i in g.indexes if i in summaries]}
-                        for g in groups
-                    ]
-                    descriptions = describe_pages(pages_payload, client, key, args.model)
-                    (work_dir / "descriptions.json").write_text(
-                        json.dumps([{"page": g.title, "description": d}
-                                    for g, d in zip(groups, descriptions)],
-                                   indent=2, ensure_ascii=False), encoding="utf-8")
+                    progress.update(task, description="Cleaning sections with the LLM...")
+                    clean_task = progress.add_task("cleaning", total=len(chunks))
+                    for i, chunk in enumerate(chunks):
+                        try:
+                            # Heading-only chunk: nothing to clean; calling the LLM here
+                            # invites hallucinated filler. Pass through untouched.
+                            body = chunk.text.split("\n", 1)[1] if "\n" in chunk.text else ""
+                            if chunk.level >= 1 and not body.strip():
+                                cleaned, summary = chunk.text, ""
+                            else:
+                                cleaned, summary = clean_chunk(chunk, client, key, model=args.model)
+                        except CleanerError as e:
+                            _info(f"  ! chunk {chunk.index} ({chunk.slug}) failed: {e}")
+                            cleaned, summary = chunk.text, ""  # fall back to raw so nothing is lost
+                            failures += 1
+                        if summary:
+                            summaries[chunk.index] = summary
+                        (work_dir / f"{chunk.slug}.md").write_text(cleaned + "\n", encoding="utf-8")
+                        sections = build_manifest(chunks[: i + 1], summaries)
+                        write_manifest(sections, manifest_path)
+                        progress.advance(clean_task)
+                    progress.remove_task(clean_task)
+                    progress.advance(task)
             else:
-                manifest_sections = [s.__dict__ for s in sections]
-                normalize_levels(manifest_sections)
-                groups = group_by_h1(work_dir, manifest_sections, None,
-                                     doc_title=input_path.stem)
-                descriptions = None
+                progress.update(task, description="Deriving document structure...")
+                chunks = derive_chunks(text, None, None, args.model, allow_llm=False)
+                progress.advance(task)
+                _info(f"Work scratch: {work_dir}")
 
-            index_page = True
-            if args.skip_toc:
-                groups, descriptions, dropped = drop_toc_page(
-                    groups, descriptions, args.skip_toc)
-                if dropped:
-                    index_page = False  # no forced landing page once the TOC is removed
-                    print(f"Skipped TOC page: {args.skip_toc!r} (pages renumbered, no index)")
+                progress.update(task, description="Writing sections (raw passthrough)...")
+                clean_task = progress.add_task("writing", total=len(chunks))
+                for chunk in chunks:
+                    (work_dir / f"{chunk.slug}.md").write_text(chunk.text + "\n", encoding="utf-8")
+                    progress.advance(clean_task)
+                progress.remove_task(clean_task)
+                sections = build_manifest(chunks, summaries)
+                write_manifest(sections, manifest_path)
+                progress.advance(task)
+
+            if not args.no_merge:
+                # Step: assemble (evaluate structure, group into pages, describe).
+                progress.update(task, description="Evaluating structure and grouping pages...")
+                if use_llm:
+                    with httpx.Client() as client:
+                        evaluated = evaluate_structure(sections, client, key, args.model)
+                        (work_dir / "structure.eval.json").write_text(
+                            json.dumps(evaluated, indent=2, ensure_ascii=False), encoding="utf-8")
+
+                        order = None
+                        suggested = evaluated.get("suggested_order")
+                        if suggested:
+                            reason = evaluated.get("reorder_reason") or "(no reason given)"
+                            if args.allow_reorder:
+                                order = suggested
+                                _info(f"Applying suggested reorder: {reason}")
+                            else:
+                                _info(f"NOTE: LLM suggests reordering sections -> {suggested}\n"
+                                      f"      reason: {reason}\n"
+                                      f"      keeping source order; rerun with --allow-reorder to apply.")
+
+                        normalize_levels(evaluated["sections"])
+
+                        groups = group_by_h1(work_dir, evaluated["sections"], order,
+                                             doc_title=evaluated.get("title") or input_path.stem)
+
+                        pages_payload = [
+                            {"title": g.title,
+                             "summaries": [summaries[i] for i in g.indexes if i in summaries]}
+                            for g in groups
+                        ]
+                        descriptions = describe_pages(pages_payload, client, key, args.model)
+                        (work_dir / "descriptions.json").write_text(
+                            json.dumps([{"page": g.title, "description": d}
+                                        for g, d in zip(groups, descriptions)],
+                                       indent=2, ensure_ascii=False), encoding="utf-8")
                 else:
-                    print(f"  ! --skip-toc {args.skip_toc!r} matched no page heading; "
-                          "nothing skipped", file=sys.stderr)
+                    manifest_sections = [s.__dict__ for s in sections]
+                    normalize_levels(manifest_sections)
+                    groups = group_by_h1(work_dir, manifest_sections, None,
+                                         doc_title=input_path.stem)
+                    descriptions = None
 
-            written = split_by_h1(
-                pages_dir, groups,
-                front_matter_extra={
-                    "last_updated": date.today().isoformat(),
-                    "status": "draft",
-                },
-                descriptions=descriptions,
-                write_meta=fuma,
-                index_page=index_page,
-                emit_front_matter=fuma,
-            )
+                index_page = True
+                if args.skip_toc:
+                    groups, descriptions, dropped = drop_toc_page(
+                        groups, descriptions, args.skip_toc)
+                    if dropped:
+                        index_page = False  # no forced landing page once the TOC is removed
+                        _info(f"Skipped TOC page: {args.skip_toc!r} (pages renumbered, no index)")
+                    else:
+                        print(f"  ! --skip-toc {args.skip_toc!r} matched no page heading; "
+                              "nothing skipped", file=sys.stderr)
+                progress.advance(task)
 
-            fixed = sum(fix_file_headings(p, start_level=1 if fuma else 0) for p in written)
-            if fixed:
-                print(f"Heading levels clamped in {fixed} file(s).")
+                # Step: finalize (write pages, clamp headings, fix links, reclaim images).
+                progress.update(task, description="Writing pages, fixing links, reclaiming images...")
+                written = split_by_h1(
+                    pages_dir, groups,
+                    front_matter_extra={
+                        "last_updated": date.today().isoformat(),
+                        "status": "draft",
+                    },
+                    descriptions=descriptions,
+                    write_meta=fuma,
+                    index_page=index_page,
+                    emit_front_matter=fuma,
+                )
 
-            # Flat layout: each page is a standalone file, so cross-page anchor links
-            # must name the target file. 'fuma' resolves #anchor within one route, so
-            # its links are left as-is.
-            if not fuma:
-                rewritten, unresolved = link_pages(written)
-                print(f"Cross-file links: {rewritten} rewritten")
-                if unresolved:
-                    uniq = sorted(set(unresolved))
-                    print(f"  ! {len(uniq)} anchor(s) not matched to any page, "
-                          f"left as-is: {uniq[:10]}{' ...' if len(uniq) > 10 else ''}",
+                fixed = sum(fix_file_headings(p, start_level=1 if fuma else 0) for p in written)
+                if fixed:
+                    _info(f"Heading levels clamped in {fixed} file(s).")
+
+                # Flat layout: each page is a standalone file, so cross-page anchor links
+                # must name the target file. 'fuma' resolves #anchor within one route, so
+                # its links are left as-is.
+                if not fuma:
+                    rewritten, unresolved = link_pages(written)
+                    _info(f"Cross-file links: {rewritten} rewritten")
+                    if unresolved:
+                        uniq = sorted(set(unresolved))
+                        print(f"  ! {len(uniq)} anchor(s) not matched to any page, "
+                              f"left as-is: {uniq[:10]}{' ...' if len(uniq) > 10 else ''}",
+                              file=sys.stderr)
+
+                missing: list[str] = []
+                for path in written:
+                    c, m = reclaim_images(path, input_path.parent, images_dir,
+                                          image_link_prefix)
+                    copied += c
+                    missing.extend(m)
+                _info(f"Images: {copied} copied to {images_dir}")
+                if missing:
+                    print(f"  ! {len(missing)} image(s) not found, links left as-is: {missing}",
                           file=sys.stderr)
-
-            copied = 0
-            missing: list[str] = []
-            for path in written:
-                c, m = reclaim_images(path, input_path.parent, images_dir,
-                                      image_link_prefix)
-                copied += c
-                missing.extend(m)
-            print(f"Images: {copied} copied to {images_dir}")
-            if missing:
-                print(f"  ! {len(missing)} image(s) not found, links left as-is: {missing}",
-                      file=sys.stderr)
-            print(f"Final clean files ({len(written)}) -> {pages_dir}")
-            for path in written:
-                print(f"  - {path.name}")
+                progress.advance(task)
     finally:
         if args.keep_work:
-            print(f"Kept work scratch: {work_dir}")
+            _info(f"Kept work scratch: {work_dir}")
         else:
             shutil.rmtree(work_dir, ignore_errors=True)
+
+    if not args.no_merge and written:
+        _console.print(f"\n[bold green]Done![/bold green] {len(written)} file(s) written.\n")
+        notes = Text()
+        notes.append("Output: ", style="bold yellow")
+        notes.append(f"{pages_dir}\n")
+        notes.append("Images: ", style="bold yellow")
+        notes.append(f"{copied} copied to {images_dir}\n")
+        for path in written:
+            notes.append(f"  - {path.name}\n", style="dim")
+        _console.print(Panel(notes, title="[bold]Reverse complete[/bold]",
+                             border_style="green", padding=(1, 2)))
 
     if failures:
         print(f"Done with {failures} failed chunk(s) (raw text kept).", file=sys.stderr)
