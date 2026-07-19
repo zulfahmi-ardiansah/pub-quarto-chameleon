@@ -149,6 +149,7 @@ def stage_zip(archive_path: Path, content_dir: Path) -> None:
 
     _extract(archive_path, staging)
     root = _strip_wrapper(staging)
+    root_resolved = root.resolve()
 
     chapters = sorted(
         (f for f in root.rglob("*") if f.is_file() and f.suffix.lower() in _MARKDOWN_SUFFIXES),
@@ -169,9 +170,19 @@ def stage_zip(archive_path: Path, content_dir: Path) -> None:
                 continue
             seen.add(raw)
             src = (md.parent / raw).resolve()
+            # Containment guard: a ref like `../../../etc/passwd` resolves outside the
+            # extracted project. Refuse to read (and exfiltrate via the output) anything
+            # that escapes the staging root. This — not the scheme check above — is the
+            # control that stops arbitrary file reads; symlinks resolve() away too.
+            try:
+                src.relative_to(root_resolved)
+            except ValueError:
+                continue
             if not src.is_file():
                 continue
             clean = _sanitize_ref(raw)
+            if not clean or clean.startswith(".."):
+                continue
             dest = content_dir / clean
             dest.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy(src, dest)

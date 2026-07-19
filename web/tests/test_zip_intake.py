@@ -95,6 +95,20 @@ def test_ref_climbing_out_is_rewritten_and_copied(tmp_path, content_dir):
     assert (content_dir / ref).read_bytes() == PNG
 
 
+def test_image_ref_escaping_staging_is_not_copied(tmp_path, content_dir):
+    # A secret outside the extracted project must never be read/exfiltrated via a
+    # climbing image ref like ../../../secret.txt.
+    secret = tmp_path / "secret.txt"
+    secret.write_bytes(b"TOP SECRET")
+    arc = make_zip(tmp_path / "in.zip", {
+        "ch.md": "# Ch\n\n![x](../../../secret.txt)\n",
+    })
+    stage_zip(arc, content_dir)
+
+    copied = [p for p in content_dir.rglob("*") if p.is_file() and p.read_bytes() == b"TOP SECRET"]
+    assert copied == [], "escaping ref must not copy files from outside the project"
+
+
 def test_no_markdown_rejected(tmp_path, content_dir):
     arc = make_zip(tmp_path / "in.zip", {"images/only.png": PNG, "readme.txt": "hi"})
     with pytest.raises(ZipIntakeError):
