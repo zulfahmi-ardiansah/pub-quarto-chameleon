@@ -112,10 +112,11 @@
       b.addEventListener("click", () => setFile(null))
     );
   }
-  // A dropped/selected .docx replaces any previous one.
+  // Exactly one .docx — a multi-file drop is rejected rather than silently picking one.
   function acceptFiles(incoming) {
-    const docx = [...incoming].find(isDocx);
-    if (docx) { setFile(docx); clearErrors(); }
+    const docxs = [...incoming].filter(isDocx);
+    if (docxs.length > 1) { showError('[data-rev-error-for="1"]', t("rev.validate.single")); return; }
+    if (docxs.length === 1) { setFile(docxs[0]); clearErrors(); }
   }
 
   dropzone.addEventListener("click", () => fileInput.click());

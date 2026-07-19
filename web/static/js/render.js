@@ -165,11 +165,18 @@ function syncInputFiles(files) {
 }
 function addFiles(incoming) {
   const accepted = [...incoming].filter((f) => ALLOWED.test(f.name));
-  // A project zip supersedes everything — zip and loose md are mutually exclusive.
-  const zip = accepted.find(isZip);
-  if (zip) { syncInputFiles([zip]); refreshFileList(); return; }
-  // Adding loose md drops any previously selected zip.
-  const existing = [...fileInput.files].filter((f) => !isZip(f));
+  const zips = accepted.filter(isZip);
+  const current = [...fileInput.files];
+
+  // A project zip is a whole bundle: exactly one, never mixed with loose md/qmd.
+  if (zips.length > 1) { showError('[data-error-for="1"]', t("upload.oneZip")); return; }
+  if (zips.length === 1) {
+    if (accepted.length > 1 || current.length) { showError('[data-error-for="1"]', t("upload.zipAlone")); return; }
+    syncInputFiles([zips[0]]); refreshFileList(); return;
+  }
+  // Loose md/qmd: many allowed, but not alongside an already-selected zip.
+  if (current.some(isZip)) { showError('[data-error-for="1"]', t("upload.zipAlone")); return; }
+  const existing = current.filter((f) => !isZip(f));
   const names = new Set(existing.map((f) => f.name));
   accepted.forEach((f) => {
     if (!names.has(f.name)) { existing.push(f); names.add(f.name); }

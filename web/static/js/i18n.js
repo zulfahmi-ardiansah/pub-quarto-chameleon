@@ -55,6 +55,8 @@ const I18N = {
     "upload.dropHint": "or click to browse .md / .qmd (each file becomes a chapter), or a .zip project with images",
     "upload.remove": "Remove",
     "upload.zipTag": "project archive",
+    "upload.oneZip": "Upload a single .zip project, not multiple.",
+    "upload.zipAlone": "A .zip project must be uploaded on its own, not mixed with other files.",
 
     "legend.cover": "Cover",
     "legend.header": "Header & TOC",
@@ -113,7 +115,7 @@ const I18N = {
     "rev.s3.desc": "Everything look right? We'll extract your document into Markdown pages.",
 
     "rev.upload.dropTitle": "Drag & drop a .docx here",
-    "rev.upload.dropHint": "or click to browse — one Word document",
+    "rev.upload.dropHint": "or click to browse, one Word document",
 
     "rev.legend.layout": "Layout",
     "rev.field.layout": "Output layout",
@@ -141,6 +143,7 @@ const I18N = {
     "rev.success.body": "Downloaded {file}. Check your downloads folder, or grab it again below.",
     "rev.success.convertAnother": "Convert another",
     "rev.validate.file": "Drop a .docx file before continuing.",
+    "rev.validate.single": "Upload a single .docx file, not multiple.",
   },
   id: {
     "brand.sub": "Quarto Chameleon",
@@ -194,6 +197,8 @@ const I18N = {
     "upload.dropHint": "atau klik untuk memilih .md / .qmd (tiap berkas menjadi satu bab), atau proyek .zip beserta gambar",
     "upload.remove": "Hapus",
     "upload.zipTag": "arsip proyek",
+    "upload.oneZip": "Unggah satu proyek .zip saja, jangan beberapa.",
+    "upload.zipAlone": "Proyek .zip harus diunggah sendiri, tidak dicampur berkas lain.",
 
     "legend.cover": "Sampul",
     "legend.header": "Header & Daftar isi",
@@ -252,7 +257,7 @@ const I18N = {
     "rev.s3.desc": "Semua sudah benar? Kami akan mengekstrak dokumen Anda menjadi halaman Markdown.",
 
     "rev.upload.dropTitle": "Seret & lepas berkas .docx di sini",
-    "rev.upload.dropHint": "atau klik untuk memilih — satu dokumen Word",
+    "rev.upload.dropHint": "atau klik untuk memilih, satu dokumen Word",
 
     "rev.legend.layout": "Tata letak",
     "rev.field.layout": "Tata letak keluaran",
@@ -280,6 +285,7 @@ const I18N = {
     "rev.success.body": "Berkas {file} terunduh. Periksa folder unduhan Anda, atau ambil lagi di bawah.",
     "rev.success.convertAnother": "Konversi lagi",
     "rev.validate.file": "Lepas berkas .docx sebelum melanjutkan.",
+    "rev.validate.single": "Unggah satu berkas .docx saja, jangan beberapa.",
   },
 };
 

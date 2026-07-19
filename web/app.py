@@ -2,7 +2,8 @@
 
 Routes parse the request, delegate to the service/util layers, and translate the result
 (or a :class:`RenderError`) into an HTTP response. The render orchestration lives in
-``service.py``, content staging in ``staging.py``, and pure helpers in ``util.py``.
+``render.py``, reverse in ``reverse.py``, content staging in ``staging.py``, and pure
+helpers in ``util.py``.
 """
 
 import io
@@ -74,7 +75,7 @@ def render():
 def reverse():
     """Convert an uploaded .docx into a zip of clean Markdown pages (+ media)."""
     try:
-        result = reverse_document(request.files.get("docx"), request.form)
+        result = reverse_document(request.files.getlist("docx"), request.form)
     except RenderError as exc:
         payload = {"error": exc.message}
         if exc.detail:

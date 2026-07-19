@@ -60,16 +60,22 @@ def build_reverse_args(form, docx_name: str) -> list[str]:
     return args
 
 
-def reverse_document(docx_upload, form) -> RenderResult:
+def reverse_document(docx_uploads, form) -> RenderResult:
     """Run one reverse job and return its packaged Markdown output.
 
-    *docx_upload* is the uploaded ``.docx`` file object, *form* the submitted options.
+    *docx_uploads* is the list of uploaded parts under the ``docx`` field, *form* the
+    submitted options. Exactly one ``.docx`` is required — the reverse pipeline converts
+    a single document, so multiple uploads are rejected rather than silently truncated.
     Raises :class:`RenderError` (mapped to an HTTP response by the caller) on any
     failure. The whole produced folder (numbered pages + media, or the fuma tree) is
     zipped into memory so the job workspace can be deleted immediately.
     """
-    if not (docx_upload and docx_upload.filename):
+    uploads = [f for f in docx_uploads if f and f.filename]
+    if not uploads:
         raise RenderError("Upload a .docx file to convert.", status=400)
+    if len(uploads) > 1:
+        raise RenderError("Upload a single .docx file, not multiple.", status=400)
+    docx_upload = uploads[0]
     if Path(docx_upload.filename).suffix.lower() != ".docx":
         raise RenderError("Input must be a .docx file.", status=400)
 
