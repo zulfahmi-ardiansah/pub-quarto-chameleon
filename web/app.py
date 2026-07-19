@@ -11,8 +11,8 @@ from pathlib import Path
 from flask import Flask, abort, jsonify, render_template, request, send_file
 
 from paths import STATIC_DIR, TEMPLATE_DIR
-from reverse_service import reverse_document
-from service import RenderError, render_document
+from render import RenderError, render_document
+from reverse import reverse_document
 from util import list_presets
 
 app = Flask(__name__)

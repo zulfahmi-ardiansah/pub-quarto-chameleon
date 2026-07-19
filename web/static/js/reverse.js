@@ -1,4 +1,4 @@
-/* Reverse wizard (docx → Markdown). Self-contained module mirroring app.js, scoped
+/* Reverse wizard (docx → Markdown). Self-contained module mirroring render.js, scoped
    to #reverse-form so it never touches the forward wizard's DOM or globals. Exposes
    window.ReverseWizard = { reset } for the mode controller to call on entry. */
 (function () {

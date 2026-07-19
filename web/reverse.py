@@ -4,7 +4,7 @@
 workspace, saves the upload, translates the submitted options into CLI flags, shells
 out to the same ``script/main.py`` entry point (a ``.docx`` positional routes it to the
 reverse pipeline), then zips the produced page/media folder — and tears the workspace
-down. Like ``service.py`` it stays free of Flask: plain form data and a file object in,
+down. Like ``render.py`` it stays free of Flask: plain form data and a file object in,
 a :class:`RenderResult` out (or a :class:`RenderError`), leaving HTTP to ``app.py``.
 """
 
@@ -15,7 +15,7 @@ from pathlib import Path
 from werkzeug.utils import secure_filename
 
 from paths import JOBS_DIR
-from service import RenderError, RenderResult, run_pipeline
+from render import RenderError, RenderResult, run_pipeline
 from util import package_folder
 
 REVERSE_TIMEOUT = 900  # seconds — the LLM path can be slow
