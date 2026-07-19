@@ -20,6 +20,17 @@ A browser front-end for Qlon, built as a 3-step wizard (Flowbite + Tailwind):
 It wraps the existing CLI pipeline (`script/main.py`) — each request runs the same
 render in an isolated, auto-deleted job workspace under `web/jobs/`.
 
+The server is split into layers:
+
+- `app.py` — Flask app + routes (thin controllers): parse the request, call the
+  service, translate the result or error into an HTTP response.
+- `service.py` — `render_document`: orchestrates one render job end to end (workspace,
+  staging, `config.yml`, CLI subprocess, packaging) and raises `RenderError`.
+- `staging.py` — `stage_content`: routes pasted text, loose `.md`/`.qmd`, or a project
+  `.zip` (safe extraction + normalization via `stage_zip`) into the content folder.
+- `util.py` — pure helpers (`build_config`, `list_presets`, `package_output`).
+- `paths.py` — shared filesystem locations.
+
 The interface is a two-pane "workbench": an ink sidebar (brand, vertical stepper,
 theme + language controls) beside a working surface. On the Content step the pasted
 Markdown renders live as a **paper-sheet preview** beside the editor (collapses to a

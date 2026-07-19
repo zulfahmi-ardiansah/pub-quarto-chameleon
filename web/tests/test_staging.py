@@ -1,5 +1,6 @@
-"""Unit tests for web.zip_intake.stage_zip."""
+"""Unit tests for web.staging (stage_zip + stage_content)."""
 
+import io
 import sys
 import zipfile
 from pathlib import Path
@@ -8,7 +9,18 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from zip_intake import ZipIntakeError, stage_zip  # noqa: E402
+from staging import StagingError, stage_content, stage_zip  # noqa: E402
+
+
+class FakeUpload:
+    """Minimal stand-in for a Werkzeug FileStorage (filename + .save)."""
+
+    def __init__(self, filename: str, data: bytes):
+        self.filename = filename
+        self._data = data
+
+    def save(self, dst) -> None:
+        Path(dst).write_bytes(self._data)
 
 
 def make_zip(path: Path, entries: dict[str, bytes | str]) -> Path:
@@ -109,9 +121,50 @@ def test_image_ref_escaping_staging_is_not_copied(tmp_path, content_dir):
     assert copied == [], "escaping ref must not copy files from outside the project"
 
 
+def test_stage_content_pasted_written_as_single_chapter(content_dir):
+    stage_content([], "# Pasted\n\nbody", content_dir)
+    assert (content_dir / "document.md").read_text(encoding="utf-8") == "# Pasted\n\nbody"
+
+
+def test_stage_content_loose_uploads(content_dir):
+    files = [FakeUpload("01-intro.md", b"# Intro"), FakeUpload("02-body.qmd", b"# Body")]
+    stage_content(files, "", content_dir)
+    assert (content_dir / "01-intro.md").is_file()
+    assert (content_dir / "02-body.qmd").is_file()
+
+
+def test_stage_content_empty_rejected(content_dir):
+    with pytest.raises(StagingError):
+        stage_content([], "", content_dir)
+
+
+def test_stage_content_bad_suffix_rejected(content_dir):
+    with pytest.raises(StagingError):
+        stage_content([FakeUpload("notes.txt", b"x")], "", content_dir)
+
+
+def test_stage_content_zip_mixed_with_md_rejected(tmp_path, content_dir):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("ch.md", "# c")
+    files = [FakeUpload("proj.zip", buf.getvalue()), FakeUpload("extra.md", b"# x")]
+    with pytest.raises(StagingError):
+        stage_content(files, "", content_dir)
+
+
+def test_stage_content_single_zip_unpacked(tmp_path, content_dir):
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w") as zf:
+        zf.writestr("project/ch1.md", "# One\n\n![p](images/a.png)\n")
+        zf.writestr("project/images/a.png", PNG)
+    stage_content([FakeUpload("proj.zip", buf.getvalue())], "", content_dir)
+    assert (content_dir / "ch1.md").is_file()
+    assert (content_dir / "images" / "a.png").read_bytes() == PNG
+
+
 def test_no_markdown_rejected(tmp_path, content_dir):
     arc = make_zip(tmp_path / "in.zip", {"images/only.png": PNG, "readme.txt": "hi"})
-    with pytest.raises(ZipIntakeError):
+    with pytest.raises(StagingError):
         stage_zip(arc, content_dir)
 
 
@@ -119,7 +172,7 @@ def test_zip_slip_absolute_path_rejected(tmp_path, content_dir):
     arc = tmp_path / "evil.zip"
     with zipfile.ZipFile(arc, "w") as zf:
         zf.writestr("../../evil.md", "# pwn\n")
-    with pytest.raises(ZipIntakeError):
+    with pytest.raises(StagingError):
         stage_zip(arc, content_dir)
     assert not (content_dir.parent.parent / "evil.md").exists()
 
@@ -127,7 +180,7 @@ def test_zip_slip_absolute_path_rejected(tmp_path, content_dir):
 def test_not_a_zip_rejected(tmp_path, content_dir):
     bogus = tmp_path / "in.zip"
     bogus.write_bytes(b"not a zip at all")
-    with pytest.raises(ZipIntakeError):
+    with pytest.raises(StagingError):
         stage_zip(bogus, content_dir)
 
 
@@ -137,5 +190,5 @@ def test_zip_bomb_total_size_rejected(tmp_path, content_dir):
     with zipfile.ZipFile(arc, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("doc.md", "# t\n")
         zf.writestr("big.png", b"\0" * (300 * 1024 * 1024))
-    with pytest.raises(ZipIntakeError):
+    with pytest.raises(StagingError):
         stage_zip(arc, content_dir)
