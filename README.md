@@ -50,19 +50,22 @@ After each run, Qlon prints a checklist. Keep these in mind when opening the out
 
 ## Web Interface
 
-Qlon ships with a browser-based wizard that wraps the same render pipeline. No command line needed — paste Markdown (or an AI response), fill in cover details, and download the `.docx`.
+Qlon ships with a browser-based wizard that wraps the same pipeline, no command line needed. It runs in **both directions**, switched by the **DOCX → MD** toggle in the top bar:
+
+- **Render** (Markdown → Word) — paste Markdown (or an AI response), fill in cover details, download the `.docx`. A 3-step wizard, the default.
+- **Reverse** (Word → Markdown) — drop a `.docx`, pick options, download clean Markdown pages as a `.zip`. A 4-step wizard.
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Content  ──  Details  ──  Review  ──  Done │  ← progress in the top bar
+│  Content  ──  Details  ──  Review  ──  Done │  ← render progress in the top bar
 ├─────────────────────────────────────────────┤
-│  Paste / upload Markdown                    │
+│  Paste / upload Markdown (or a .zip project)│
 │  Fill title, author, template               │
 │  Generate → auto-download .docx             │
 └─────────────────────────────────────────────┘
 ```
 
-**Features:** drag-and-drop file upload · paste from clipboard · Markdown preview (modal) · dark mode · EN/ID language toggle · loading overlay · success screen with re-download.
+**Features:** render + reverse in one page · drag-and-drop upload · `.zip` project upload (Markdown + images) · paste from clipboard · Markdown preview (modal) · reverse LLM options (layout, model, reorder) · dark mode · EN/ID language toggle · loading overlay · success screen with re-download.
 
 ### Run with Docker (recommended)
 
