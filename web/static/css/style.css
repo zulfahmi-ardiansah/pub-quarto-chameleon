@@ -12,6 +12,21 @@
 }
 .dark.canvas-bg { background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px); }
 
+/* ---------------- Wizard steppers (forward/reverse, responsive + mode-gated) ----
+   Each wizard has a desktop stepper and a mobile progress bar in the header. The
+   .stepper-desktop/.stepper-mobile classes own the breakpoint (desktop-only vs
+   mobile-only); the body.mode-reverse class then hides whichever wizard is inactive.
+   Kept in CSS (not Tailwind responsive utilities) so the mode gate and the media
+   query don't fight over `display`. */
+.stepper-desktop { display: none; }
+.stepper-mobile { display: block; }
+@media (min-width: 768px) {
+  .stepper-desktop { display: block; }
+  .stepper-mobile { display: none; }
+}
+body:not(.mode-reverse) [data-reverse-only] { display: none !important; }
+body.mode-reverse [data-forward-only] { display: none !important; }
+
 /* ---------------- Top horizontal stepper ---------------- */
 .hstep { display: flex; align-items: center; gap: 0.5rem; flex-shrink: 0; }
 .hstep .badge {

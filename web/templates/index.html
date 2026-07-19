@@ -42,13 +42,13 @@
     };
   </script>
   <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Source+Serif+4:opsz,wght@8..60,400;8..60,600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ asset_v|default('r15') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ asset_v|default('r16') }}">
 </head>
 <body class="canvas-bg flex min-h-full flex-col bg-gray-25 font-sans text-gray-900 antialiased dark:bg-[#0f1828] dark:text-gray-100">
 
   <!-- ============ TOP BAR (brand · progress · controls) ============ -->
   <header class="sticky top-0 z-30 border-b border-gray-200 bg-white dark:border-ink-800 dark:bg-ink-900">
-    <div class="mx-auto grid max-w-6xl grid-cols-[1fr_1fr] md:grid-cols-[1fr_auto_1fr] items-center gap-4 px-4 py-3 sm:px-6">
+    <div class="mx-auto grid max-w-6xl grid-cols-[1fr_1fr_1fr] md:grid-cols-[1fr_auto_4fr] items-center gap-4 px-4 py-3 sm:px-6">
       <div class="flex items-center gap-2.5 justify-self-start">
         <span class="flex h-9 w-9 items-center justify-center rounded-lg bg-primary-600 font-display text-xl font-bold text-white">Q</span>
         <div class="leading-tight">
@@ -56,20 +56,38 @@
         </div>
       </div>
 
-      <!-- Progress (centered in the bar, desktop only) -->
-      <nav aria-label="Progress" class="hidden md:block">
-        <ol class="flex items-center">
-          <li class="hstep" data-step-nav="1"><span class="badge">1</span><span class="hstep-label" data-i18n="step.content">Content</span></li>
-          <li class="connector"></li>
-          <li class="hstep" data-step-nav="2"><span class="badge">2</span><span class="hstep-label" data-i18n="step.info">Details</span></li>
-          <li class="connector"></li>
-          <li class="hstep" data-step-nav="3"><span class="badge">3</span><span class="hstep-label" data-i18n="step.render">Review</span></li>
-          <li class="connector"></li>
-          <li class="hstep" data-step-nav="4"><span class="badge">4</span><span class="hstep-label" data-i18n="step.done">Done</span></li>
-        </ol>
-      </nav>
-
+      <!-- Progress (centered in the bar, desktop only). One stepper per wizard;
+           the mode controller shows exactly one and hides the other. -->
+      <div class="justify-self-center">
+        <nav aria-label="Progress" id="forward-progress" class="stepper-desktop" data-forward-only>
+          <ol class="flex items-center">
+            <li class="hstep" data-step-nav="1"><span class="badge">1</span><span class="hstep-label" data-i18n="step.content">Content</span></li>
+            <li class="connector"></li>
+            <li class="hstep" data-step-nav="2"><span class="badge">2</span><span class="hstep-label" data-i18n="step.info">Details</span></li>
+            <li class="connector"></li>
+            <li class="hstep" data-step-nav="3"><span class="badge">3</span><span class="hstep-label" data-i18n="step.render">Review</span></li>
+            <li class="connector"></li>
+            <li class="hstep" data-step-nav="4"><span class="badge">4</span><span class="hstep-label" data-i18n="step.done">Done</span></li>
+          </ol>
+        </nav>
+        <nav aria-label="Progress" id="reverse-progress" class="stepper-desktop" data-reverse-only>
+          <ol class="flex items-center">
+            <li class="hstep" data-rev-step-nav="1"><span class="badge">1</span><span class="hstep-label" data-i18n="rev.step.upload">Upload</span></li>
+            <li class="connector"></li>
+            <li class="hstep" data-rev-step-nav="2"><span class="badge">2</span><span class="hstep-label" data-i18n="rev.step.options">Options</span></li>
+            <li class="connector"></li>
+            <li class="hstep" data-rev-step-nav="3"><span class="badge">3</span><span class="hstep-label" data-i18n="rev.step.review">Review</span></li>
+            <li class="connector"></li>
+            <li class="hstep" data-rev-step-nav="4"><span class="badge">4</span><span class="hstep-label" data-i18n="rev.step.done">Done</span></li>
+          </ol>
+        </nav>
+      </div>
       <div class="flex items-center gap-2 justify-self-end">
+        <button type="button" id="mode-toggle"
+          class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-lg border border-gray-300 px-3 py-2 text-xs font-semibold text-gray-600 transition hover:border-primary-500 hover:text-primary-600 dark:border-ink-700 dark:text-gray-300 dark:hover:border-primary-500 dark:hover:text-primary-300">
+          <svg class="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"/></svg>
+          <span id="mode-toggle-label" data-i18n="mode.toReverse">DOCX → MD</span>
+        </button>
         <div class="inline-flex overflow-hidden rounded-lg border border-gray-300 text-xs font-semibold dark:border-ink-700" role="group" aria-label="Language">
           <button type="button" data-lang="en" class="lang-btn px-3 py-2">EN</button>
           <button type="button" data-lang="id" class="lang-btn border-l border-gray-300 px-3 py-2 dark:border-ink-700">ID</button>
@@ -82,10 +100,16 @@
     </div>
 
     <!-- Mobile progress -->
-    <div class="border-t border-gray-200 px-4 py-2.5 dark:border-ink-800 md:hidden">
+    <div class="stepper-mobile border-t border-gray-200 px-4 py-2.5 dark:border-ink-800" data-forward-only>
       <p id="step-count" class="mb-1.5 text-sm font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></p>
       <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-ink-800">
         <div id="mobile-progress" class="h-full rounded-full bg-primary-600 transition-all duration-300" style="width:25%"></div>
+      </div>
+    </div>
+    <div class="stepper-mobile border-t border-gray-200 px-4 py-2.5 dark:border-ink-800" data-reverse-only>
+      <p id="rev-step-count" class="mb-1.5 text-sm font-medium text-gray-500 dark:text-gray-400" aria-live="polite"></p>
+      <div class="h-1 w-full overflow-hidden rounded-full bg-gray-200 dark:bg-ink-800">
+        <div id="rev-mobile-progress" class="h-full rounded-full bg-primary-600 transition-all duration-300" style="width:25%"></div>
       </div>
     </div>
   </header>
@@ -132,12 +156,12 @@
 
         <!-- Upload mode -->
         <div class="mode-panel mt-4 hidden" data-mode-panel="upload">
-          <input type="file" name="files" id="file-input" accept=".md,.qmd" multiple class="sr-only">
+          <input type="file" name="files" id="file-input" accept=".md,.qmd,.zip" multiple class="sr-only">
           <div id="dropzone" tabindex="0" role="button" aria-labelledby="dz-title"
             class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white px-6 py-14 text-center shadow-sm transition hover:border-primary-500 hover:bg-primary-50 dark:border-ink-700 dark:bg-ink-900 dark:hover:border-primary-500 dark:hover:bg-primary-900/20">
             <svg class="mb-3 h-10 w-10 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 16V4m0 0L8 8m4-4l4 4M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2"/></svg>
             <p id="dz-title" class="text-sm font-medium text-gray-700 dark:text-gray-200" data-i18n="upload.dropTitle">Drag &amp; drop files here</p>
-            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" data-i18n="upload.dropHint">or click to browse — .md / .qmd, each file becomes a chapter</p>
+            <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" data-i18n="upload.dropHint">or click to browse — .md / .qmd (each file becomes a chapter), or a .zip project with images</p>
           </div>
           <ul id="file-list" class="mt-3 space-y-1.5 text-sm"></ul>
         </div>
@@ -283,6 +307,148 @@
         </div>
       </section>
     </form>
+
+      <!-- ============ REVERSE WIZARD (docx → Markdown) ============ -->
+      <form id="reverse-form" class="mx-auto hidden max-w-4xl px-4 py-8 sm:px-6 sm:py-10">
+
+        <!-- ---- Reverse Step 1: upload docx ---- -->
+        <section class="step-panel" data-rev-step="1">
+          <p class="eyebrow" data-i18n="rev.eyebrow.step1">Step 1 — Document</p>
+          <h1 class="surface-title" data-i18n="rev.s1.title">Bring in your Word file</h1>
+          <p class="surface-sub" data-i18n="rev.s1.desc">Drop a single .docx and we'll turn it into clean Markdown pages — one file per chapter, plus its images.</p>
+
+          <div class="mode-panel mt-6">
+            <input type="file" name="docx" id="rev-file-input" accept=".docx" class="sr-only">
+            <div id="rev-dropzone" tabindex="0" role="button" aria-labelledby="rev-dz-title"
+              class="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-gray-300 bg-white px-6 py-14 text-center shadow-sm transition hover:border-primary-500 hover:bg-primary-50 dark:border-ink-700 dark:bg-ink-900 dark:hover:border-primary-500 dark:hover:bg-primary-900/20">
+              <svg class="mb-3 h-10 w-10 text-gray-400 dark:text-gray-600" fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+              <p id="rev-dz-title" class="text-sm font-medium text-gray-700 dark:text-gray-200" data-i18n="rev.upload.dropTitle">Drag &amp; drop a .docx here</p>
+              <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" data-i18n="rev.upload.dropHint">or click to browse — one Word document</p>
+            </div>
+            <ul id="rev-file-list" class="mt-3 space-y-1.5 text-sm"></ul>
+          </div>
+
+          <p class="step-error mt-4 hidden text-sm text-red-600 dark:text-red-400" data-rev-error-for="1" role="alert"></p>
+          <div class="surface-footer">
+            <span></span>
+            <button type="button" data-rev-next class="btn-primary inline-flex items-center gap-2">
+              <span data-i18n="btn.next">Next</span>
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m0 0l-6-6m6 6l-6 6"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- ---- Reverse Step 2: options ---- -->
+        <section class="step-panel hidden" data-rev-step="2">
+          <p class="eyebrow" data-i18n="rev.eyebrow.step2">Step 2 — Options</p>
+          <h1 class="surface-title" data-i18n="rev.s2.title">How should it be converted?</h1>
+          <p class="surface-sub" data-i18n="rev.s2.desc">Defaults give a fast, deterministic conversion. Turn on the LLM for AI cleanup and the Fumadocs layout.</p>
+
+          <div class="mt-6 space-y-5">
+            <fieldset class="panel">
+              <legend class="legend" data-i18n="rev.legend.layout">Layout</legend>
+              <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label class="block text-sm">
+                  <span class="field-label capitalize" data-i18n="rev.field.layout">Output layout</span>
+                  <select name="layout" id="rev-layout" class="field-input">
+                    <option value="flat" data-i18n="rev.layout.flat">Flat (.md files + media/)</option>
+                    <option value="fuma" data-i18n="rev.layout.fuma">Fumadocs (requires LLM)</option>
+                  </select>
+                </label>
+                <label class="block text-sm">
+                  <span class="field-label capitalize" data-i18n="rev.field.skipToc">Skip TOC heading</span>
+                  <input type="text" name="skip_toc" placeholder="Table of Contents" class="field-input">
+                </label>
+              </div>
+              <label class="mt-4 flex items-center gap-2.5 text-sm hidden">
+                <input type="checkbox" name="no_merge" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600">
+                <span class="text-gray-700 dark:text-gray-200" data-i18n="rev.field.noMerge">Skip the final merge step (keep raw sections)</span>
+              </label>
+            </fieldset>
+
+            <fieldset class="panel">
+              <legend class="legend" data-i18n="rev.legend.llm">AI cleanup (LLM)</legend>
+              <label class="flex items-center gap-2.5 text-sm">
+                <input type="checkbox" name="use_llm" id="rev-use-llm" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600">
+                <span class="text-gray-700 dark:text-gray-200" data-i18n="rev.field.useLlm">Use an LLM to segment, clean and describe sections</span>
+              </label>
+              <p id="rev-fuma-note" class="mt-3 hidden text-xs text-primary-600 dark:text-primary-400" data-i18n="rev.llm.fumaLocked">The Fumadocs layout always uses the LLM.</p>
+
+              <div id="rev-llm-fields" class="mt-4 hidden space-y-4">
+                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <label class="block text-sm">
+                    <span class="field-label capitalize" data-i18n="rev.field.modelName">Model name</span>
+                    <input type="text" name="model_name" placeholder="google/gemma-4-26b-a4b-it" class="field-input">
+                  </label>
+                  <label class="block text-sm">
+                    <span class="field-label capitalize" data-i18n="rev.field.modelEndpoint">Model endpoint</span>
+                    <input type="text" name="model_endpoint" placeholder="https://openrouter.ai/api/v1" class="field-input">
+                  </label>
+                  <label class="block text-sm sm:col-span-2">
+                    <span class="field-label capitalize" data-i18n="rev.field.modelKey">API key</span>
+                    <input type="password" name="model_key" autocomplete="off" placeholder="sk-****" class="field-input">
+                  </label>
+                </div>
+                <label class="flex items-center gap-2.5 text-sm">
+                  <input type="checkbox" name="allow_reorder" class="h-4 w-4 rounded border-gray-300 text-primary-600 focus:ring-primary-600">
+                  <span class="text-gray-700 dark:text-gray-200" data-i18n="rev.field.allowReorder">Apply the LLM's suggested section reorder</span>
+                </label>
+                <div class="mt-4 flex items-start gap-3 rounded-xl border border-dashed border-gray-300 bg-gray-50 p-4 dark:border-ink-700 dark:bg-ink-800/40">
+                  <svg class="mt-0.5 h-5 w-5 flex-shrink-0 text-primary-600 dark:text-primary-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                  <div class="flex-1 text-sm text-gray-600 dark:text-gray-300">
+                    <p class="mt-0.5 text-gray-500 dark:text-gray-400" data-i18n="rev.llm.keyNote">Your key is used once for this conversion and never stored.</p>
+                  </div>
+                </div>
+              </div>
+            </fieldset>
+          </div>
+
+          <div class="surface-footer">
+            <button type="button" data-rev-back class="btn-ghost" data-i18n="btn.back">Back</button>
+            <button type="button" data-rev-next class="btn-primary inline-flex items-center gap-2">
+              <span data-i18n="btn.next">Next</span>
+              <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14m0 0l-6-6m6 6l-6 6"/></svg>
+            </button>
+          </div>
+        </section>
+
+        <!-- ---- Reverse Step 3: review ---- -->
+        <section class="step-panel hidden" data-rev-step="3">
+          <p class="eyebrow" data-i18n="rev.eyebrow.step3">Step 3 — Review</p>
+          <h1 class="surface-title" data-i18n="rev.s3.title">Review and convert</h1>
+          <p class="surface-sub" data-i18n="rev.s3.desc">Everything look right? We'll extract your document into Markdown pages.</p>
+
+          <dl id="rev-summary" class="mt-6 divide-y divide-gray-200 overflow-hidden rounded-xl border border-gray-200 bg-white text-sm dark:divide-ink-800 dark:border-ink-800 dark:bg-ink-900"></dl>
+
+          <div id="rev-status" role="status" aria-live="polite" class="mt-4 hidden rounded-lg border p-4 text-sm"></div>
+
+          <div class="surface-footer">
+            <button type="button" data-rev-back class="btn-ghost" data-i18n="btn.back">Back</button>
+            <button type="submit" id="rev-submit-btn" class="btn-primary" data-i18n="rev.btn.convert">Convert to Markdown</button>
+          </div>
+        </section>
+
+        <!-- ---- Reverse Step 4: done ---- -->
+        <section class="step-panel hidden" data-rev-step="4">
+          <div class="mx-auto max-w-md py-6 text-center">
+            <div class="success-check mx-auto">
+              <svg class="h-9 w-9" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7"/></svg>
+            </div>
+            <h1 class="surface-title mt-5" data-i18n="rev.success.title">Your Markdown is ready</h1>
+            <p id="rev-success-body" class="surface-sub mx-auto mt-2"></p>
+            <div class="mt-7 flex flex-col items-center justify-center gap-3 sm:flex-row">
+              <button type="button" id="rev-download-again" class="btn-ghost inline-flex items-center gap-2">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+                <span data-i18n="success.downloadAgain">Download again</span>
+              </button>
+              <button type="button" id="rev-create-another" class="btn-primary inline-flex items-center gap-2">
+                <svg class="h-4 w-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" d="M12 5v14m-7-7h14"/></svg>
+                <span data-i18n="rev.success.convertAnother">Convert another</span>
+              </button>
+            </div>
+          </div>
+        </section>
+      </form>
   </main>
 
   <!-- ============ FOOTER ============ -->
@@ -331,7 +497,7 @@
           <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"></path>
         </svg>
         <p id="loading-title" class="mt-5 font-display text-lg font-bold" data-i18n="loading.title">Generating your document</p>
-        <p class="mt-1 text-sm text-gray-500 dark:text-gray-400" data-i18n="loading.sub">Rendering with Quarto — this can take up to a minute.</p>
+        <p id="loading-sub" class="mt-1 text-sm text-gray-500 dark:text-gray-400" data-i18n="loading.sub">Rendering with Quarto — this can take up to a minute.</p>
         <div class="indeterminate mt-5"><div class="indeterminate-bar"></div></div>
       </div>
     </div>
@@ -409,7 +575,7 @@
         </div>
         <div class="overflow-auto p-5">
           <p class="mb-3 text-sm text-gray-600 dark:text-gray-300"><span data-i18n="help.steps">Hover the AI's reply and click the <strong>Copy</strong> button, then paste it into the Markdown box.</span> <span data-i18n="help.other">Using a different tool? It works the same way!</span></p>
-          <img id="help-img" src="{{ url_for('static', filename='img/help-chat-gpt.png') }}?v={{ asset_v|default('r15') }}" alt="" loading="lazy" class="w-full rounded-lg border border-gray-200 dark:border-ink-800">
+          <img id="help-img" src="{{ url_for('static', filename='img/help-chat-gpt.png') }}?v={{ asset_v|default('r16') }}" alt="" loading="lazy" class="w-full rounded-lg border border-gray-200 dark:border-ink-800">
         </div>
       </div>
     </div>
@@ -417,7 +583,10 @@
 
   <script src="https://cdn.jsdelivr.net/npm/marked@12.0.2/marked.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
-  <script src="{{ url_for('static', filename='js/i18n.js') }}?v={{ asset_v|default('r15') }}"></script>
-  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_v|default('r15') }}"></script>
+  <script src="{{ url_for('static', filename='js/i18n.js') }}?v={{ asset_v|default('r16') }}"></script>
+  <script src="{{ url_for('static', filename='js/app.js') }}?v={{ asset_v|default('r16') }}"></script>
+  <script src="{{ url_for('static', filename='js/render.js') }}?v={{ asset_v|default('r16') }}"></script>
+  <script src="{{ url_for('static', filename='js/reverse.js') }}?v={{ asset_v|default('r16') }}"></script>
+  <script src="{{ url_for('static', filename='js/mode.js') }}?v={{ asset_v|default('r16') }}"></script>
 </body>
 </html>
