@@ -8,6 +8,13 @@ Writing documentation in Word is tedious, hard to track, and doesn't play well w
 
 You write in `.qmd`, describe your document in a YAML config file, and Qlon handles the rest — assembling the workspace, injecting metadata, rendering to Word via [Quarto](https://quarto.org/), replacing header placeholders, and delivering the finished files to your working directory. No touching Quarto configs or Word templates required. Just like a Chameleon.
 
+Qlon runs in **two directions**, chosen automatically by the input:
+
+- **Render** (`qlon <config.yml>`) — assemble `.qmd`/`.md` chapters into a styled `.docx`. The primary flow; everything below documents it unless noted.
+- **Reverse** (`qlon <input.docx>`) — extract a `.docx` back into clean, structured Markdown pages, optionally segmented and cleaned by an LLM. See [Reverse mode](#reverse-mode-docx--markdown).
+
+Run `qlon -h` for a combined overview of both modes.
+
 ---
 
 ## How It Works
@@ -43,19 +50,22 @@ After each run, Qlon prints a checklist. Keep these in mind when opening the out
 
 ## Web Interface
 
-Qlon ships with a browser-based wizard that wraps the same render pipeline. No command line needed — paste Markdown (or an AI response), fill in cover details, and download the `.docx`.
+Qlon ships with a browser-based wizard that wraps the same pipeline, no command line needed. It runs in **both directions**, switched by the **DOCX → MD** toggle in the top bar:
+
+- **Render** (Markdown → Word) — paste Markdown (or an AI response), fill in cover details, download the `.docx`. A 3-step wizard, the default.
+- **Reverse** (Word → Markdown) — drop a `.docx`, pick options, download clean Markdown pages as a `.zip`. A 4-step wizard.
 
 ```
 ┌─────────────────────────────────────────────┐
-│  Content  ──  Details  ──  Review  ──  Done │  ← progress in the top bar
+│  Content  ──  Details  ──  Review  ──  Done │  ← render progress in the top bar
 ├─────────────────────────────────────────────┤
-│  Paste / upload Markdown                    │
+│  Paste / upload Markdown (or a .zip project)│
 │  Fill title, author, template               │
 │  Generate → auto-download .docx             │
 └─────────────────────────────────────────────┘
 ```
 
-**Features:** drag-and-drop file upload · paste from clipboard · Markdown preview (modal) · dark mode · EN/ID language toggle · loading overlay · success screen with re-download.
+**Features:** render + reverse in one page · drag-and-drop upload · `.zip` project upload (Markdown + images) · paste from clipboard · Markdown preview (modal) · reverse LLM options (layout, model, reorder) · dark mode · EN/ID language toggle · loading overlay · success screen with re-download.
 
 ### Run with Docker (recommended)
 
@@ -185,6 +195,7 @@ The output `.docx` is written to whichever directory you run the command from. I
 | `--test` | — | Run using the built-in `test/example.yml` instead of a config file |
 | `--preset <name>` | — | Use a template from the `template/` folder by name (e.g. `basic`) |
 | `--custom <path>` | — | Use any `.docx` file on your machine as the reference template |
+| `--keep-work` | — | Keep the per-run `render/<uuid>` workspace instead of deleting it (for debugging) |
 
 *Not required when `--test` is used. `--preset` and `--custom` are mutually exclusive.
 
@@ -215,6 +226,30 @@ bin\qlon.bat --test
 ```
 
 This runs against `test/example.yml` and uses the sample chapter in `test/`. Output files appear in the current directory.
+
+### Reverse mode (docx → Markdown)
+
+Pass a `.docx` as the input and Qlon runs the **reverse** pipeline instead of rendering. It extracts the document to Markdown with Quarto/Pandoc, splits it into pages at headings, and writes clean `.md` files to a `./<input name>/` folder in your working directory (plus a `media/` subfolder for images). With `--use-llm` it additionally segments, cleans, and describes each section using an OpenAI-compatible LLM.
+
+```bat
+bin\qlon.bat input.docx
+bin\qlon.bat input.docx --use-llm
+```
+
+| Argument | Description |
+|----------|-------------|
+| `input` (`.docx`) | The Word document to extract |
+| `--use-llm` | Run the LLM steps (segment / clean / structure / describe). Without it (or without a key), the run is a deterministic passthrough of the raw Quarto extraction |
+| `--layout flat\|fuma` | Output layout: `flat` (all `.md` + a `media/` subfolder, default) or `fuma` (Fumadocs: `content/docs/<topic>/` + `public/images/<topic>/` + `meta.json`). `fuma` requires the LLM. Only `fuma` pages carry YAML front matter (`title`, `description`, …) and drop the redundant `# <title>` heading; `flat` pages have no front matter and keep the H1 |
+| `--model-name <id>` | Model id (default: `$LLM_MODEL` or the built-in default) |
+| `--model-endpoint <url>` | LLM API base URL (default: `$LLM_BASE_URL` or the built-in default) |
+| `--model-key <key>` | LLM API key (default: `$LLM_API_KEY` / `$OPENROUTER_API_KEY`) |
+| `--no-merge` | Skip the final merge step |
+| `--skip-toc <heading>` | Drop the page whose first heading equals `<heading>` (the table-of-contents page). Remaining pages are renumbered from `00-` and no index page is written |
+| `--allow-reorder` | Apply the LLM's suggested section reorder, if any |
+| `--keep-work` | Keep the per-run `render/<uuid>` scratch folder |
+
+The LLM is configured via environment (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`) or the `--model-*` flags above; an OpenRouter-compatible endpoint is used by default. Reverse shares the same `render/<uuid>` scratch base as the render pipeline and cleans it up the same way.
 
 ---
 
@@ -377,10 +412,14 @@ The Word template (`basic.docx`) is automatically applied to every chapter — n
 │   └── index.qmd             # Cover page and table of contents (always the first chapter)
 │
 ├── config/
-│   └── _quarto.yml           # Base Quarto project configuration
+│   ├── _quarto.yml           # Base Quarto project configuration
+│   └── prompt.py             # LLM prompt constants (reverse pipeline)
 │
 ├── script/
-│   └── main.py               # Core render pipeline (all logic lives here)
+│   ├── main.py               # Router: .docx -> reverse, anything else -> render
+│   ├── render.py             # Render pipeline (yml/qmd -> styled .docx)
+│   ├── reverse.py            # Reverse pipeline (.docx -> clean Markdown pages)
+│   └── utility.py            # Shared helpers + OpenAI-compatible LLM client
 │
 ├── template/
 │   └── basic.docx            # Word reference template (controls fonts, styles, headers)
@@ -401,7 +440,11 @@ The Word template (`basic.docx`) is automatically applied to every chapter — n
 | File | Purpose |
 |------|---------|
 | `bin/qlon.bat` / `qlon.sh` | Entry points. Detect virtual environment, check Python and Quarto availability, then launch `script/main.py` |
-| `script/main.py` | The full render pipeline — all 8 steps in one file |
+| `script/main.py` | Router. Dispatches to the render or reverse pipeline based on the input |
+| `script/render.py` | The render pipeline (yml/qmd → styled `.docx`), organized into steps |
+| `script/reverse.py` | The reverse pipeline (`.docx` → clean Markdown pages) |
+| `script/utility.py` | Shared string/env helpers and the OpenAI-compatible LLM client |
+| `config/prompt.py` | LLM prompt constants used by the reverse pipeline |
 | `config/_quarto.yml` | The base Quarto config. Modified at render time — never edited directly |
 | `component/index.qmd` | The cover and TOC page. Always included as the first chapter |
 | `template/basic.docx` | The Word style reference. Controls all visual formatting in the output |
