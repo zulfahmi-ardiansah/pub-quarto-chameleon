@@ -164,31 +164,36 @@ function syncInputFiles(files) {
   files.forEach((f) => dt.items.add(f));
   fileInput.files = dt.files;
 }
-function addFiles(incoming) {
+
+function addFiles(incoming, current = [...fileInput.files]) {
   const accepted = [...incoming].filter((f) => ALLOWED.test(f.name));
   const zips = accepted.filter(isZip);
-  const current = [...fileInput.files];
+  const fail = (key) => { syncInputFiles(current); refreshFileList(); showError('[data-error-for="1"]', t(key)); };
 
   // A project zip is a whole bundle: exactly one, never mixed with loose md/qmd.
-  if (zips.length > 1) { showError('[data-error-for="1"]', t("upload.oneZip")); return; }
+  if (zips.length > 1) return fail("upload.oneZip");
   if (zips.length === 1) {
-    if (accepted.length > 1 || current.length) { showError('[data-error-for="1"]', t("upload.zipAlone")); return; }
+    if (accepted.length > 1 || current.length) return fail("upload.zipAlone");
     syncInputFiles([zips[0]]); refreshFileList(); return;
   }
+
   // Loose md/qmd: many allowed, but not alongside an already-selected zip.
-  if (current.some(isZip)) { showError('[data-error-for="1"]', t("upload.zipAlone")); return; }
+  if (current.some(isZip)) return fail("upload.zipAlone");
   const existing = current.filter((f) => !isZip(f));
   const names = new Set(existing.map((f) => f.name));
   accepted.forEach((f) => {
     if (!names.has(f.name)) { existing.push(f); names.add(f.name); }
   });
+
   syncInputFiles(existing.sort((a, b) => a.name.localeCompare(b.name)));
   refreshFileList();
 }
+
 function removeFile(name) {
   syncInputFiles([...fileInput.files].filter((f) => f.name !== name));
   refreshFileList();
 }
+
 function refreshFileList() {
   const files = [...fileInput.files];
   fileList.innerHTML = files.map((f, i) => `
@@ -210,7 +215,7 @@ function refreshFileList() {
 
 dropzone.addEventListener("click", () => fileInput.click());
 dropzone.addEventListener("keydown", (e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); fileInput.click(); } });
-fileInput.addEventListener("change", () => addFiles(fileInput.files));
+fileInput.addEventListener("change", () => addFiles([...fileInput.files], []));
 ["dragenter", "dragover"].forEach((ev) =>
   dropzone.addEventListener(ev, (e) => { e.preventDefault(); dropzone.classList.add("dropzone-active"); })
 );
