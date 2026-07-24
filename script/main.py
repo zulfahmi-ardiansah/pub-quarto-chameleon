@@ -41,6 +41,7 @@ render options  (yml -> DOCX, output to the current directory):
   --custom PATH        path to a custom .docx reference template
   --keep-work          keep the per-run render/<uuid> workspace
   --output, -o DIR     folder to write the .docx/Image output into (default: cwd)
+  --no-images          skip exporting the Image/ folder; copy only the .docx
 
 reverse options  (docx -> Markdown pages, output to ./<input name>/):
   --use-llm            run the LLM steps (segment / clean / structure / describe)

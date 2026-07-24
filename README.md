@@ -197,6 +197,7 @@ The output `.docx` is written to whichever directory you run the command from. I
 | `--custom <path>` | — | Use any `.docx` file on your machine as the reference template |
 | `--keep-work` | — | Keep the per-run `render/<uuid>` workspace instead of deleting it (for debugging) |
 | `--output <dir>`, `-o <dir>` | — | Folder to write the `.docx` and `Image/` output into (default: current directory). Created if missing |
+| `--no-images` | — | Skip exporting the `Image/` folder; copy only the `.docx` |
 
 *Not required when `--test` is used. `--preset` and `--custom` are mutually exclusive.
 

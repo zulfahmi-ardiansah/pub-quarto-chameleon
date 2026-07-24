@@ -444,6 +444,8 @@ def main() -> None:
                         help="keep the per-run render/<uuid> workspace (default: delete)")
     parser.add_argument("--output", "-o", metavar="DIR",
                         help="folder to write the .docx and Image/ output into (default: current directory)")
+    parser.add_argument("--no-images", action="store_true",
+                        help="skip exporting the Image/ folder; copy only the .docx")
     args = parser.parse_args()
 
     if args.test:
@@ -566,9 +568,12 @@ def main() -> None:
         collect_output(original_cwd)
         progress.advance(task)
 
-        has_images = any(chapter_images)
-        progress.update(task, description="Exporting images to Image/ folder..." if has_images else "No images found, skipping export...")
-        collect_images(original_cwd, chapter_images)
+        has_images = any(chapter_images) and not args.no_images
+        if args.no_images:
+            progress.update(task, description="Skipping Image/ export (--no-images)...")
+        else:
+            progress.update(task, description="Exporting images to Image/ folder..." if has_images else "No images found, skipping export...")
+            collect_images(original_cwd, chapter_images)
         progress.advance(task)
 
         if args.keep_work:
