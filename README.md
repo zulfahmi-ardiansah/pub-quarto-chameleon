@@ -323,6 +323,14 @@ The visual appearance of the output — fonts, heading styles, spacing, colors, 
 
 To create your own template, copy `template/basic.docx` and start modifying it in Microsoft Word. Save it anywhere, then point Qlon to it using `--preset` (if placed in the `template/` folder) or `--custom` (for any path on your machine).
 
+You can also set a default template in the config instead of passing a CLI flag every time:
+
+```yaml
+template: "custom.docx"   # path relative to the config yml
+```
+
+`--preset`/`--custom` on the command line always take priority over this. If the config path doesn't exist, Qlon falls back to the default `basic.docx` template.
+
 ### Adding static content to the template
 
 For anything that appears on every page and does not change per document — a company logo, a background image, a fixed label, a decorative element — add it directly inside the **header or footer** of the template using Word's header/footer editing mode.
@@ -395,6 +403,26 @@ flowchart LR
 Qlon renders each diagram to a high-resolution PNG (3× pixel density) using a headless Chromium browser via Playwright, then embeds it as an inline image. Diagrams are named `Diagram-x-y.png` in document order alongside other images.
 
 > **Note:** Mermaid diagrams are rasterised at render time. If a diagram appears too small in the output, scale the image up in Word.
+
+By default diagrams use Mermaid's dagre layout. To use the ELK layout engine instead (better for large/complex flowcharts), set it as the default for all diagrams in your config:
+
+```yaml
+mermaid:
+  layout: elk
+```
+
+Or per-diagram, using Mermaid's standard frontmatter — overrides the config default:
+
+````markdown
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart LR
+    A[Write Markdown] --> B[Run Qlon] --> C[Get DOCX]
+```
+````
 
 The Word template (`basic.docx`) is automatically applied to every chapter — no per-file configuration needed. To use a different template, pass `--preset` or `--custom` on the command line (see [Usage](#usage)).
 

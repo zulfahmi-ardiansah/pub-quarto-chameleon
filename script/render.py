@@ -92,28 +92,44 @@ _MERMAID_BLOCK = re.compile(r'```mermaid\n(.*?)```', re.DOTALL)
 
 # --- Utility Method ---
 
-def _playwright_render_mermaid(browser, diagram_src: str) -> bytes:
+def _playwright_render_mermaid(browser, diagram_src: str, layout: str | None = None) -> bytes:
     import html as _html
     context = browser.new_context(device_scale_factor=3)
     page = context.new_page()
+    init_opts = "{startOnLoad:true, layout:'elk'}" if layout == "elk" else "{startOnLoad:true}"
+    head = (
+        '<script type="module">'
+        "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';"
+        "import elkLayouts from 'https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0/dist/mermaid-layout-elk.esm.min.mjs';"
+        "mermaid.registerLayoutLoaders(elkLayouts);"
+        f"mermaid.initialize({init_opts});"
+        "</script>"
+    )
     page.set_content(
         "<!DOCTYPE html><html><head>"
-        '<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>'
+        f"{head}"
         "</head><body style='margin:0;background:white;'>"
         f"<div class='mermaid' style='display:inline-block;padding:16px;'>{_html.escape(diagram_src)}</div>"
-        "<script>mermaid.initialize({startOnLoad:true});</script>"
         "</body></html>"
     )
     page.wait_for_selector(".mermaid svg", timeout=15_000)
+    # Mermaid inserts an empty <svg> placeholder before async layout/render finishes
+    # (esm build code-splits the layout engine) — wait for it to actually be populated.
+    page.wait_for_function(
+        "document.querySelector('.mermaid svg')?.hasAttribute('viewBox')", timeout=15_000
+    )
     png = page.locator(".mermaid").screenshot()
     context.close()
     return png
 
 
-def _render_mermaid_blocks(text: str, dest_dir: Path, names: list[str]) -> tuple[str, dict[str, Path]]:
+def _render_mermaid_blocks(
+    text: str, dest_dir: Path, names: list[str], layout: str | None = None
+) -> tuple[str, dict[str, Path]]:
     """Render each ```mermaid block to a PNG and replace it with an image reference.
 
     *names* must have one entry per mermaid block — used as the output filename.
+    *layout* selects the mermaid layout engine (e.g. "elk"); default dagre when None.
     Returns (modified_text, {ref_string: created_path}) for every diagram rendered.
     Falls back to Quarto-native ```{mermaid} syntax on failure (not included in the dict).
     """
@@ -130,7 +146,7 @@ def _render_mermaid_blocks(text: str, dest_dir: Path, names: list[str]) -> tuple
         browser = pw.chromium.launch()
         for match, name in zip(matches, names):
             try:
-                png = _playwright_render_mermaid(browser, match.group(1))
+                png = _playwright_render_mermaid(browser, match.group(1), layout)
                 path = diagrams_dir / name
                 path.write_bytes(png)
                 ref = f"diagrams/{name}"
@@ -160,7 +176,9 @@ def _copy_images(text: str, src_dir: Path) -> None:
 
 # --- Step Method ---
 
-def copy_content(content_folder: str, config_dir: Path) -> tuple[list[str], list[list[Path]]]:
+def copy_content(
+    content_folder: str, config_dir: Path, mermaid_layout: str | None = None
+) -> tuple[list[str], list[list[Path]]]:
     """Copy all .qmd and .md files from *content_folder* into the workspace.
 
     .md files are copied as .qmd — Quarto picks up their H1 as the chapter title natively.
@@ -193,7 +211,7 @@ def copy_content(content_folder: str, config_dir: Path) -> tuple[list[str], list
             if kind == "mermaid"
         ]
 
-        text, diagram_paths = _render_mermaid_blocks(text, RENDER_DIR, mermaid_names)
+        text, diagram_paths = _render_mermaid_blocks(text, RENDER_DIR, mermaid_names, mermaid_layout)
         dest_name = f.stem + ".qmd" if f.suffix == ".md" else f.name
         (RENDER_DIR / dest_name).write_text(text, encoding="utf-8")
         names.append(dest_name)
@@ -461,9 +479,15 @@ def main() -> None:
             sys.exit(1)
     else:
         custom_template = None
+        config_template = config.get("template")
+        if config_template:
+            candidate = (config_dir / config_template).resolve()
+            if candidate.exists():
+                custom_template = candidate
     header = config.get("header", {})
     content = config.get("content", {})
     table_title = content.get("table", {}).get("title")
+    mermaid_layout = config.get("mermaid", {}).get("layout")
 
     progress_columns = (
         SpinnerColumn(),
@@ -500,7 +524,9 @@ def main() -> None:
             progress.advance(task)
 
         progress.update(task, description="Copying and pre-processing content files...")
-        chapter_files, chapter_images = copy_content(content.get("folder", "content/"), config_dir)
+        chapter_files, chapter_images = copy_content(
+            content.get("folder", "content/"), config_dir, mermaid_layout
+        )
         progress.advance(task)
 
         progress.update(task, description="Writing Quarto configuration...")
