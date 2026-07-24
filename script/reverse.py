@@ -995,6 +995,8 @@ def parse_args() -> argparse.Namespace:
                    help="run the LLM steps (segmentation, cleaning, structure eval, "
                         "descriptions). Without it (or without LLM_API_KEY) the run is "
                         "a deterministic passthrough of the raw quarto extraction.")
+    p.add_argument("--output", "-o", metavar="DIR",
+                   help="base folder to write the <input-stem>/ output into (default: current directory)")
     return p.parse_args()
 
 
@@ -1032,8 +1034,9 @@ def main() -> int:
     work_dir = work_base / str(uuid.uuid4())
     work_dir.mkdir()
     # Final output lands in the caller's working directory (like render.py),
-    # grouped in a subfolder named after the input.
-    target_dir = Path.cwd() / input_path.stem
+    # grouped in a subfolder named after the input, unless --output overrides the base.
+    output_base = Path(args.output).resolve() if args.output else Path.cwd()
+    target_dir = output_base / input_path.stem
     topic = slugify(input_path.stem)
     if fuma:
         pages_dir = target_dir / "content" / "docs" / topic

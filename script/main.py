@@ -19,6 +19,7 @@ import sys
 _VALUE_FLAGS = frozenset({
     "--layout", "--model-name", "--model-endpoint", "--model-key", "--skip-toc",  # reverse
     "--preset", "--custom",                                                       # render
+    "--output", "-o",                                                             # both
 })
 
 # Combined help. Hand-maintained: keep in sync with reverse.parse_args and
@@ -39,6 +40,7 @@ render options  (yml -> DOCX, output to the current directory):
   --preset NAME        built-in template in template/ (e.g. basic)
   --custom PATH        path to a custom .docx reference template
   --keep-work          keep the per-run render/<uuid> workspace
+  --output, -o DIR     folder to write the .docx/Image output into (default: cwd)
 
 reverse options  (docx -> Markdown pages, output to ./<input name>/):
   --use-llm            run the LLM steps (segment / clean / structure / describe)
@@ -50,6 +52,7 @@ reverse options  (docx -> Markdown pages, output to ./<input name>/):
   --skip-toc HEADING   drop the page whose first heading is HEADING (the TOC page)
   --allow-reorder      apply the LLM's suggested section reorder
   --keep-work          keep the per-run render/<uuid> scratch folder
+  --output, -o DIR     base folder for the <input-stem>/ output (default: cwd)
 
 Run `qlon <input> --help` for a pipeline's own argparse help.
 """

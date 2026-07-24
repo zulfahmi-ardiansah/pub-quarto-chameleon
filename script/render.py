@@ -442,6 +442,8 @@ def main() -> None:
     parser.add_argument("--custom", metavar="PATH", help="Path to a custom .docx reference template")
     parser.add_argument("--keep-work", action="store_true",
                         help="keep the per-run render/<uuid> workspace (default: delete)")
+    parser.add_argument("--output", "-o", metavar="DIR",
+                        help="folder to write the .docx and Image/ output into (default: current directory)")
     args = parser.parse_args()
 
     if args.test:
@@ -462,7 +464,8 @@ def main() -> None:
     OUTPUT_DIR = RENDER_DIR / "_output"
 
     config_dir = config_path.resolve().parent
-    original_cwd = Path.cwd()
+    original_cwd = Path(args.output).resolve() if args.output else Path.cwd()
+    original_cwd.mkdir(parents=True, exist_ok=True)
     if args.preset and args.custom:
         _console.print("[red]Use either --preset or --custom, not both.[/red]")
         sys.exit(1)
@@ -479,11 +482,26 @@ def main() -> None:
             sys.exit(1)
     else:
         custom_template = None
-        config_template = config.get("template")
-        if config_template:
-            candidate = (config_dir / config_template).resolve()
+        template_cfg = config.get("template", {})
+        if isinstance(template_cfg, str):
+            template_cfg = {"custom": template_cfg}  # back-compat: bare string == custom path
+        cfg_preset = template_cfg.get("preset")
+        cfg_custom = template_cfg.get("custom")
+        if cfg_preset and cfg_custom:
+            _console.print("[red]Use either template.preset or template.custom in config, not both.[/red]")
+            sys.exit(1)
+        elif cfg_preset:
+            candidate = TEMPLATE_DIR / f"{cfg_preset}.docx"
             if candidate.exists():
                 custom_template = candidate
+            else:
+                _console.print(f"[yellow]Preset not found: {candidate} — falling back to basic.docx[/yellow]")
+        elif cfg_custom:
+            candidate = (config_dir / cfg_custom).resolve()
+            if candidate.exists():
+                custom_template = candidate
+            else:
+                _console.print(f"[yellow]Template not found: {candidate} — falling back to basic.docx[/yellow]")
     header = config.get("header", {})
     content = config.get("content", {})
     table_title = content.get("table", {}).get("title")
@@ -560,7 +578,7 @@ def main() -> None:
             cleanup()
         progress.advance(task)
 
-    _console.print("\n[bold green]Done![/bold green] Your DOCX is ready in the current directory.\n")
+    _console.print(f"\n[bold green]Done![/bold green] Your DOCX is ready in {original_cwd}\n")
 
     notes = Text()
     notes.append("1. ", style="bold yellow")
