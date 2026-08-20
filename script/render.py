@@ -10,12 +10,13 @@ directory, then cleans up the workspace.
 
 import argparse
 import importlib.util
+import posixpath
 import re
 import shutil
 import subprocess
 import sys
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Check third-party dependencies before importing them so the error is actionable
 _REQUIRED = {"yaml": "pyyaml", "docx": "python-docx", "rich": "rich", "playwright": "playwright"}
@@ -88,6 +89,7 @@ def patch_index_title(title: str) -> None:
 
 _IMG_REF = re.compile(r'!\[.*?\]\(([^)]+)\)')
 _MERMAID_BLOCK = re.compile(r'```mermaid\n(.*?)```', re.DOTALL)
+_INCLUDE_REF = re.compile(r'\{\{<\s*include\s+(.+?)\s*>\}\}')
 
 
 # --- Utility Method ---
@@ -162,11 +164,69 @@ def _render_mermaid_blocks(
     return result, created
 
 
+def _is_external(ref: str) -> bool:
+    """True for refs Quarto resolves itself (absolute or remote) — never staged."""
+    return ref.startswith(("http://", "https://", "/"))
+
+
+def _reroot_images(text: str, rel: PurePosixPath) -> str:
+    """Prefix relative image refs in *text* with *rel* so they resolve from the chapter folder.
+
+    Content pulled in from a subfolder writes its image paths relative to itself; once
+    inlined into the chapter the paths must be relative to the chapter folder instead.
+    Rerooting also keeps two features that both ship an ``image/foo.png`` from colliding
+    in the workspace.
+    """
+    if rel == PurePosixPath("."):
+        return text
+
+    def sub(match: re.Match) -> str:
+        raw = match.group(1).split()[0]
+        if _is_external(raw):
+            return match.group(0)
+        rest = match.group(1)[len(raw):]
+        alt = match.group(0)[: match.group(0).index("](")]
+        return f"{alt}]({rel / raw}{rest})"
+
+    return _IMG_REF.sub(sub, text)
+
+
+def _expand_includes(
+    text: str, src_dir: Path, rel: PurePosixPath, seen: frozenset[Path]
+) -> str:
+    """Recursively inline Quarto ``{{< include ... >}}`` directives.
+
+    Quarto resolves include paths relative to the file holding the directive, but only
+    top-level chapter files are staged into the workspace — anything in a subfolder would
+    be missing at render time. Inlining the content instead keeps a single self-contained
+    chapter file, and lets the existing image/mermaid passes see the included text in
+    document order. *rel* is the current file's folder relative to the chapter folder;
+    *seen* holds the resolved include chain, guarding against circular includes.
+    """
+    text = _reroot_images(text, rel)
+
+    def sub(match: re.Match) -> str:
+        raw = match.group(1).split()[0]
+        if _is_external(raw):
+            return match.group(0)
+        inc = (src_dir / raw).resolve()
+        if inc in seen:
+            return ""
+        if not inc.exists():
+            return match.group(0)  # leave in place so Quarto reports the missing file
+        inc_rel = PurePosixPath(posixpath.normpath(str(rel / raw))).parent
+        if inc_rel.parts and inc_rel.parts[0] == "..":
+            inc_rel = PurePosixPath(".")  # outside the chapter folder: cannot reroot
+        return _expand_includes(inc.read_text(encoding="utf-8"), inc.parent, inc_rel, seen | {inc})
+
+    return _INCLUDE_REF.sub(sub, text)
+
+
 def _copy_images(text: str, src_dir: Path) -> None:
     """Copy relative images referenced in *text* from *src_dir* into the workspace."""
     for match in _IMG_REF.finditer(text):
         raw = match.group(1).split()[0]  # strip optional title attribute
-        if raw.startswith(("http://", "https://", "/")):
+        if _is_external(raw) or ".." in PurePosixPath(raw).parts:
             continue
         img_src = (src_dir / raw).resolve()
         if img_src.exists():
@@ -191,6 +251,7 @@ def copy_content(
     chapter_images: list[list[Path]] = []
     for chapter_idx, f in enumerate(files, 1):
         text = f.read_text(encoding="utf-8")
+        text = _expand_includes(text, f.parent, PurePosixPath("."), frozenset({f.resolve()}))
         _copy_images(text, f.parent)
 
         # Assign y-indices by merging user image refs and mermaid blocks in document order
