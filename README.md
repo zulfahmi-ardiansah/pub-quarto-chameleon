@@ -196,6 +196,8 @@ The output `.docx` is written to whichever directory you run the command from. I
 | `--preset <name>` | — | Use a template from the `template/` folder by name (e.g. `basic`) |
 | `--custom <path>` | — | Use any `.docx` file on your machine as the reference template |
 | `--keep-work` | — | Keep the per-run `render/<uuid>` workspace instead of deleting it (for debugging) |
+| `--output <dir>`, `-o <dir>` | — | Folder to write the `.docx` and `Image/` output into (default: current directory). Created if missing |
+| `--no-images` | — | Skip exporting the `Image/` folder; copy only the `.docx` |
 
 *Not required when `--test` is used. `--preset` and `--custom` are mutually exclusive.
 
@@ -225,7 +227,7 @@ To verify the installation with the built-in example config:
 bin\qlon.bat --test
 ```
 
-This runs against `test/example.yml` and uses the sample chapter in `test/`. Output files appear in the current directory.
+This runs against `test/example.yml` and uses the sample chapter in `test/`. Output files appear in the current directory, or wherever `--output` points.
 
 ### Reverse mode (docx → Markdown)
 
@@ -247,6 +249,7 @@ bin\qlon.bat input.docx --use-llm
 | `--no-merge` | Skip the final merge step |
 | `--skip-toc <heading>` | Drop the page whose first heading equals `<heading>` (the table-of-contents page). Remaining pages are renumbered from `00-` and no index page is written |
 | `--allow-reorder` | Apply the LLM's suggested section reorder, if any |
+| `--output <dir>`, `-o <dir>` | Base folder to write the `<input-stem>/` output into (default: current directory). Created if missing |
 | `--keep-work` | Keep the per-run `render/<uuid>` scratch folder |
 
 The LLM is configured via environment (`LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`) or the `--model-*` flags above; an OpenRouter-compatible endpoint is used by default. Reverse shares the same `render/<uuid>` scratch base as the render pipeline and cleans it up the same way.
@@ -291,12 +294,16 @@ quarto:
 | `header.subtitle` | no | Replaces the `Head-Subtitle` placeholder in every page header |
 | `content.folder` | yes | Path to your `.qmd` chapter files, relative to the config file |
 | `content.table.title` | no | Title shown on the table of contents page. Defaults to the value set in `component/index.qmd` |
+| `template.preset` | no | Name of a template in the `template/` folder, e.g. `adw-iproc` (mutually exclusive with `template.custom`) |
+| `template.custom` | no | Path to a `.docx` reference template, relative to the config file (mutually exclusive with `template.preset`) |
+| `mermaid.layout` | no | Default Mermaid layout engine (`elk` or omit for dagre). Can be overridden per-diagram via standard Mermaid frontmatter |
 | `quarto` | no | Any Quarto format properties to override. Deep-merged into `config/_quarto.yml` after all other settings are applied |
 
 ### Notes
 
 - `content.folder` is resolved relative to the config file, not your current directory. This means you can run `qlon` from anywhere.
 - The `quarto:` block supports any valid Quarto format property. However, `toc` is always forced to `false` because the TOC is managed by the cover page (`index.qmd`) — this cannot be overridden.
+- To set the output `.docx` filename, use `quarto.book.output-file` (e.g. `quarto: {book: {output-file: "MyReport"}}`). Without it, Quarto derives the filename from `cover.title`.
 - Chapter files inside `content.folder` are sorted alphabetically. Name them with a numeric prefix (e.g. `01-intro.qmd`, `02-setup.qmd`) to control order.
 
 ---
@@ -322,6 +329,20 @@ In addition to the `.docx`, an `Image/` folder is created in your working direct
 The visual appearance of the output — fonts, heading styles, spacing, colors, header and footer layout — is controlled entirely by the Word reference template (`basic.docx`).
 
 To create your own template, copy `template/basic.docx` and start modifying it in Microsoft Word. Save it anywhere, then point Qlon to it using `--preset` (if placed in the `template/` folder) or `--custom` (for any path on your machine).
+
+You can also set a default template in the config instead of passing a CLI flag every time:
+
+```yaml
+template: "custom.docx"   # path relative to the config yml
+```
+
+```yaml
+template:
+  preset: "adw-iproc"     # name of a template in the template/ folder
+  # custom: "custom.docx" # or: path to a .docx file, relative to this yml file
+```
+
+`--preset`/`--custom` on the command line always take priority over this. `template.preset` and `template.custom` are mutually exclusive. If the preset/path doesn't exist, Qlon falls back to the default `basic.docx` template.
 
 ### Adding static content to the template
 
@@ -395,6 +416,26 @@ flowchart LR
 Qlon renders each diagram to a high-resolution PNG (3× pixel density) using a headless Chromium browser via Playwright, then embeds it as an inline image. Diagrams are named `Diagram-x-y.png` in document order alongside other images.
 
 > **Note:** Mermaid diagrams are rasterised at render time. If a diagram appears too small in the output, scale the image up in Word.
+
+By default diagrams use Mermaid's dagre layout. To use the ELK layout engine instead (better for large/complex flowcharts), set it as the default for all diagrams in your config:
+
+```yaml
+mermaid:
+  layout: elk
+```
+
+Or per-diagram, using Mermaid's standard frontmatter — overrides the config default:
+
+````markdown
+```mermaid
+---
+config:
+  layout: elk
+---
+flowchart LR
+    A[Write Markdown] --> B[Run Qlon] --> C[Get DOCX]
+```
+````
 
 The Word template (`basic.docx`) is automatically applied to every chapter — no per-file configuration needed. To use a different template, pass `--preset` or `--custom` on the command line (see [Usage](#usage)).
 

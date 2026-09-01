@@ -10,12 +10,13 @@ directory, then cleans up the workspace.
 
 import argparse
 import importlib.util
+import posixpath
 import re
 import shutil
 import subprocess
 import sys
 import uuid
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 # Check third-party dependencies before importing them so the error is actionable
 _REQUIRED = {"yaml": "pyyaml", "docx": "python-docx", "rich": "rich", "playwright": "playwright"}
@@ -88,32 +89,49 @@ def patch_index_title(title: str) -> None:
 
 _IMG_REF = re.compile(r'!\[.*?\]\(([^)]+)\)')
 _MERMAID_BLOCK = re.compile(r'```mermaid\n(.*?)```', re.DOTALL)
+_INCLUDE_REF = re.compile(r'\{\{<\s*include\s+(.+?)\s*>\}\}')
 
 
 # --- Utility Method ---
 
-def _playwright_render_mermaid(browser, diagram_src: str) -> bytes:
+def _playwright_render_mermaid(browser, diagram_src: str, layout: str | None = None) -> bytes:
     import html as _html
     context = browser.new_context(device_scale_factor=3)
     page = context.new_page()
+    init_opts = "{startOnLoad:true, layout:'elk'}" if layout == "elk" else "{startOnLoad:true}"
+    head = (
+        '<script type="module">'
+        "import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';"
+        "import elkLayouts from 'https://cdn.jsdelivr.net/npm/@mermaid-js/layout-elk@0/dist/mermaid-layout-elk.esm.min.mjs';"
+        "mermaid.registerLayoutLoaders(elkLayouts);"
+        f"mermaid.initialize({init_opts});"
+        "</script>"
+    )
     page.set_content(
         "<!DOCTYPE html><html><head>"
-        '<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>'
+        f"{head}"
         "</head><body style='margin:0;background:white;'>"
         f"<div class='mermaid' style='display:inline-block;padding:16px;'>{_html.escape(diagram_src)}</div>"
-        "<script>mermaid.initialize({startOnLoad:true});</script>"
         "</body></html>"
     )
     page.wait_for_selector(".mermaid svg", timeout=15_000)
+    # Mermaid inserts an empty <svg> placeholder before async layout/render finishes
+    # (esm build code-splits the layout engine) — wait for it to actually be populated.
+    page.wait_for_function(
+        "document.querySelector('.mermaid svg')?.hasAttribute('viewBox')", timeout=15_000
+    )
     png = page.locator(".mermaid").screenshot()
     context.close()
     return png
 
 
-def _render_mermaid_blocks(text: str, dest_dir: Path, names: list[str]) -> tuple[str, dict[str, Path]]:
+def _render_mermaid_blocks(
+    text: str, dest_dir: Path, names: list[str], layout: str | None = None
+) -> tuple[str, dict[str, Path]]:
     """Render each ```mermaid block to a PNG and replace it with an image reference.
 
     *names* must have one entry per mermaid block — used as the output filename.
+    *layout* selects the mermaid layout engine (e.g. "elk"); default dagre when None.
     Returns (modified_text, {ref_string: created_path}) for every diagram rendered.
     Falls back to Quarto-native ```{mermaid} syntax on failure (not included in the dict).
     """
@@ -130,7 +148,7 @@ def _render_mermaid_blocks(text: str, dest_dir: Path, names: list[str]) -> tuple
         browser = pw.chromium.launch()
         for match, name in zip(matches, names):
             try:
-                png = _playwright_render_mermaid(browser, match.group(1))
+                png = _playwright_render_mermaid(browser, match.group(1), layout)
                 path = diagrams_dir / name
                 path.write_bytes(png)
                 ref = f"diagrams/{name}"
@@ -146,11 +164,69 @@ def _render_mermaid_blocks(text: str, dest_dir: Path, names: list[str]) -> tuple
     return result, created
 
 
+def _is_external(ref: str) -> bool:
+    """True for refs Quarto resolves itself (absolute or remote) — never staged."""
+    return ref.startswith(("http://", "https://", "/"))
+
+
+def _reroot_images(text: str, rel: PurePosixPath) -> str:
+    """Prefix relative image refs in *text* with *rel* so they resolve from the chapter folder.
+
+    Content pulled in from a subfolder writes its image paths relative to itself; once
+    inlined into the chapter the paths must be relative to the chapter folder instead.
+    Rerooting also keeps two features that both ship an ``image/foo.png`` from colliding
+    in the workspace.
+    """
+    if rel == PurePosixPath("."):
+        return text
+
+    def sub(match: re.Match) -> str:
+        raw = match.group(1).split()[0]
+        if _is_external(raw):
+            return match.group(0)
+        rest = match.group(1)[len(raw):]
+        alt = match.group(0)[: match.group(0).index("](")]
+        return f"{alt}]({rel / raw}{rest})"
+
+    return _IMG_REF.sub(sub, text)
+
+
+def _expand_includes(
+    text: str, src_dir: Path, rel: PurePosixPath, seen: frozenset[Path]
+) -> str:
+    """Recursively inline Quarto ``{{< include ... >}}`` directives.
+
+    Quarto resolves include paths relative to the file holding the directive, but only
+    top-level chapter files are staged into the workspace — anything in a subfolder would
+    be missing at render time. Inlining the content instead keeps a single self-contained
+    chapter file, and lets the existing image/mermaid passes see the included text in
+    document order. *rel* is the current file's folder relative to the chapter folder;
+    *seen* holds the resolved include chain, guarding against circular includes.
+    """
+    text = _reroot_images(text, rel)
+
+    def sub(match: re.Match) -> str:
+        raw = match.group(1).split()[0]
+        if _is_external(raw):
+            return match.group(0)
+        inc = (src_dir / raw).resolve()
+        if inc in seen:
+            return ""
+        if not inc.exists():
+            return match.group(0)  # leave in place so Quarto reports the missing file
+        inc_rel = PurePosixPath(posixpath.normpath(str(rel / raw))).parent
+        if inc_rel.parts and inc_rel.parts[0] == "..":
+            inc_rel = PurePosixPath(".")  # outside the chapter folder: cannot reroot
+        return _expand_includes(inc.read_text(encoding="utf-8"), inc.parent, inc_rel, seen | {inc})
+
+    return _INCLUDE_REF.sub(sub, text)
+
+
 def _copy_images(text: str, src_dir: Path) -> None:
     """Copy relative images referenced in *text* from *src_dir* into the workspace."""
     for match in _IMG_REF.finditer(text):
         raw = match.group(1).split()[0]  # strip optional title attribute
-        if raw.startswith(("http://", "https://", "/")):
+        if _is_external(raw) or ".." in PurePosixPath(raw).parts:
             continue
         img_src = (src_dir / raw).resolve()
         if img_src.exists():
@@ -160,7 +236,9 @@ def _copy_images(text: str, src_dir: Path) -> None:
 
 # --- Step Method ---
 
-def copy_content(content_folder: str, config_dir: Path) -> tuple[list[str], list[list[Path]]]:
+def copy_content(
+    content_folder: str, config_dir: Path, mermaid_layout: str | None = None
+) -> tuple[list[str], list[list[Path]]]:
     """Copy all .qmd and .md files from *content_folder* into the workspace.
 
     .md files are copied as .qmd — Quarto picks up their H1 as the chapter title natively.
@@ -173,6 +251,7 @@ def copy_content(content_folder: str, config_dir: Path) -> tuple[list[str], list
     chapter_images: list[list[Path]] = []
     for chapter_idx, f in enumerate(files, 1):
         text = f.read_text(encoding="utf-8")
+        text = _expand_includes(text, f.parent, PurePosixPath("."), frozenset({f.resolve()}))
         _copy_images(text, f.parent)
 
         # Assign y-indices by merging user image refs and mermaid blocks in document order
@@ -193,7 +272,7 @@ def copy_content(content_folder: str, config_dir: Path) -> tuple[list[str], list
             if kind == "mermaid"
         ]
 
-        text, diagram_paths = _render_mermaid_blocks(text, RENDER_DIR, mermaid_names)
+        text, diagram_paths = _render_mermaid_blocks(text, RENDER_DIR, mermaid_names, mermaid_layout)
         dest_name = f.stem + ".qmd" if f.suffix == ".md" else f.name
         (RENDER_DIR / dest_name).write_text(text, encoding="utf-8")
         names.append(dest_name)
@@ -424,6 +503,10 @@ def main() -> None:
     parser.add_argument("--custom", metavar="PATH", help="Path to a custom .docx reference template")
     parser.add_argument("--keep-work", action="store_true",
                         help="keep the per-run render/<uuid> workspace (default: delete)")
+    parser.add_argument("--output", "-o", metavar="DIR",
+                        help="folder to write the .docx and Image/ output into (default: current directory)")
+    parser.add_argument("--no-images", action="store_true",
+                        help="skip exporting the Image/ folder; copy only the .docx")
     args = parser.parse_args()
 
     if args.test:
@@ -444,7 +527,8 @@ def main() -> None:
     OUTPUT_DIR = RENDER_DIR / "_output"
 
     config_dir = config_path.resolve().parent
-    original_cwd = Path.cwd()
+    original_cwd = Path(args.output).resolve() if args.output else Path.cwd()
+    original_cwd.mkdir(parents=True, exist_ok=True)
     if args.preset and args.custom:
         _console.print("[red]Use either --preset or --custom, not both.[/red]")
         sys.exit(1)
@@ -461,9 +545,30 @@ def main() -> None:
             sys.exit(1)
     else:
         custom_template = None
+        template_cfg = config.get("template", {})
+        if isinstance(template_cfg, str):
+            template_cfg = {"custom": template_cfg}  # back-compat: bare string == custom path
+        cfg_preset = template_cfg.get("preset")
+        cfg_custom = template_cfg.get("custom")
+        if cfg_preset and cfg_custom:
+            _console.print("[red]Use either template.preset or template.custom in config, not both.[/red]")
+            sys.exit(1)
+        elif cfg_preset:
+            candidate = TEMPLATE_DIR / f"{cfg_preset}.docx"
+            if candidate.exists():
+                custom_template = candidate
+            else:
+                _console.print(f"[yellow]Preset not found: {candidate} — falling back to basic.docx[/yellow]")
+        elif cfg_custom:
+            candidate = (config_dir / cfg_custom).resolve()
+            if candidate.exists():
+                custom_template = candidate
+            else:
+                _console.print(f"[yellow]Template not found: {candidate} — falling back to basic.docx[/yellow]")
     header = config.get("header", {})
     content = config.get("content", {})
     table_title = content.get("table", {}).get("title")
+    mermaid_layout = config.get("mermaid", {}).get("layout")
 
     progress_columns = (
         SpinnerColumn(),
@@ -500,7 +605,9 @@ def main() -> None:
             progress.advance(task)
 
         progress.update(task, description="Copying and pre-processing content files...")
-        chapter_files, chapter_images = copy_content(content.get("folder", "content/"), config_dir)
+        chapter_files, chapter_images = copy_content(
+            content.get("folder", "content/"), config_dir, mermaid_layout
+        )
         progress.advance(task)
 
         progress.update(task, description="Writing Quarto configuration...")
@@ -522,9 +629,12 @@ def main() -> None:
         collect_output(original_cwd)
         progress.advance(task)
 
-        has_images = any(chapter_images)
-        progress.update(task, description="Exporting images to Image/ folder..." if has_images else "No images found, skipping export...")
-        collect_images(original_cwd, chapter_images)
+        has_images = any(chapter_images) and not args.no_images
+        if args.no_images:
+            progress.update(task, description="Skipping Image/ export (--no-images)...")
+        else:
+            progress.update(task, description="Exporting images to Image/ folder..." if has_images else "No images found, skipping export...")
+            collect_images(original_cwd, chapter_images)
         progress.advance(task)
 
         if args.keep_work:
@@ -534,7 +644,7 @@ def main() -> None:
             cleanup()
         progress.advance(task)
 
-    _console.print("\n[bold green]Done![/bold green] Your DOCX is ready in the current directory.\n")
+    _console.print(f"\n[bold green]Done![/bold green] Your DOCX is ready in {original_cwd}\n")
 
     notes = Text()
     notes.append("1. ", style="bold yellow")

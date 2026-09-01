@@ -26,6 +26,16 @@ content:
     title: "Table of Contents"              # Title shown on the table of contents page (index.qmd)
                                             # Omit this key to keep the default title from index.qmd
 
+# Word reference template — used only when --preset/--custom are not passed on the CLI.
+# Falls back to the basic template if the preset/path is missing or doesn't exist.
+template:
+  preset: "adw-iproc"     # name of a template in the template/ folder (mutually exclusive with custom)
+  # custom: "custom.docx" # path to a .docx file, relative to this yml file
+
+# Mermaid diagram rendering options
+mermaid:
+  layout: elk                               # Layout engine: omit for default (dagre), or "elk" for the ELK layout engine
+
 # Quarto format overrides — any property here deep-merges into config/_quarto.yml
 # Only include what you want to change; everything else keeps its default value
 quarto:
