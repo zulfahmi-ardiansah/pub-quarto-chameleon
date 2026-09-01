@@ -29,6 +29,7 @@ if _missing:
 
 import yaml
 from docx import Document
+from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from playwright.sync_api import sync_playwright
 from rich.console import Console
@@ -345,14 +346,42 @@ def resize_images_to_fit(doc: Document) -> None:
         shape.width = int(w * scale)
         shape.height = int(h * scale)
 
+def fit_tables_to_page(doc: Document) -> None:
+    """Switch every table to AutoFit-to-window so it stays within the page margins.
+
+    Quarto emits fixed-layout tables whose grid column widths can sum past the right
+    margin and clip. Setting ``w:tblLayout`` to autofit, forcing the table width to 100%
+    of the content zone (``w:tblW`` type ``pct`` = 5000), and releasing the fixed cell
+    widths (``w:tcW`` -> auto) lets Word reflow the columns to fit.
+    """
+    for table in doc.tables:
+        table.autofit = True  # sets w:tblLayout type="autofit" with correct ordering
+        tblPr = table._tbl.tblPr
+
+        for old in tblPr.findall(qn("w:tblW")):
+            tblPr.remove(old)
+        tblW = OxmlElement("w:tblW")
+        tblW.set(qn("w:type"), "pct")
+        tblW.set(qn("w:w"), "5000")  # 5000 fiftieths of a percent = 100%
+        tblPr.insert_element_before(
+            tblW, "w:jc", "w:tblCellSpacing", "w:tblInd", "w:tblBorders", "w:shd",
+            "w:tblLayout", "w:tblCellMar", "w:tblLook", "w:tblCaption",
+            "w:tblDescription", "w:tblPrChange",
+        )
+
+        for tcW in table._tbl.iter(qn("w:tcW")):
+            tcW.set(qn("w:type"), "auto")
+            tcW.set(qn("w:w"), "0")
+
 # --- Step Method ---
 
 def patch_headers(replacements: dict[str, str]) -> None:
-    """Apply header replacements, image auto-fit, and TOC dirty-flag to every DOCX in the output dir."""
+    """Apply header replacements, image/table auto-fit, and TOC dirty-flag to every DOCX in the output dir."""
     for docx_file in OUTPUT_DIR.glob("*.docx"):
         doc = Document(docx_file)
         replace_in_header(doc, replacements)
         resize_images_to_fit(doc)
+        fit_tables_to_page(doc)
         mark_toc_dirty(doc)
         doc.save(docx_file)
 
@@ -482,7 +511,7 @@ def main() -> None:
         quarto_render()
         progress.advance(task)
 
-        progress.update(task, description="Applying header replacements, auto-fitting images, and marking TOC for refresh...")
+        progress.update(task, description="Applying header replacements, auto-fitting images and tables, and marking TOC for refresh...")
         patch_headers({
             _PLACEHOLDER_TITLE: header.get("title", ""),
             _PLACEHOLDER_SUBTITLE: header.get("subtitle", ""),

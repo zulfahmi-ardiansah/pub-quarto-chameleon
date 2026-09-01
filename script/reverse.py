@@ -172,6 +172,9 @@ def split_into_chunks(markdown: str) -> list[Chunk]:
         end = boundaries[b + 1][0] if b + 1 < len(boundaries) else len(lines)
         text = "\n".join(lines[start:end]).strip("\n")
         heading = _clean_heading(raw_heading)
+        body = "\n".join(text.splitlines()[1:]).strip()
+        if not heading and not body:
+            continue
         chunks.append(Chunk(idx, level, heading, _slugify(raw_heading, idx), text))
         idx += 1
 
@@ -669,10 +672,13 @@ def group_by_h1(
     order: list[int] | None = None,
     doc_title: str | None = None,
 ) -> list[PageGroup]:
-    """Group sections into pages: a new page starts at every level-1 heading.
+    """Group sections into pages: a new page starts at every titled level-1 heading.
 
     The first group is always the index page (`doc_title`), collecting the
-    preamble and anything before the first H1 -- it may be empty.
+    preamble and anything before the first H1 -- it may be empty. A level-1
+    section with no heading text (e.g. a docx TOC field) starts no page of its
+    own -- it has no title to give one -- and is folded into the current page
+    instead, with its own blank heading line dropped.
     """
     by_index = {s["index"]: s for s in sections}
     sequence = order if order else [s["index"] for s in sections]
@@ -682,9 +688,11 @@ def group_by_h1(
         sec = by_index[idx]
         text = (chunk_dir / sec["file"]).read_text(encoding="utf-8").strip("\n")
         text = _apply_heading(text, sec["level"], sec["heading"])
-        if sec["level"] == 1:
+        if sec["level"] == 1 and sec["heading"]:
             groups.append(PageGroup(sec["heading"], [text], [idx]))
         else:
+            if sec["level"] == 1:
+                text = "\n".join(text.splitlines()[1:]).lstrip("\n")
             groups[-1].parts.append(text)
             groups[-1].indexes.append(idx)
     return groups
@@ -797,7 +805,8 @@ def split_by_h1(
             body = _strip_leading_h1(body)
             path.write_text(_yaml_front_matter(fm) + body + "\n", encoding="utf-8")
         else:
-            if not body.lstrip().startswith("# "):
+            stripped = body.lstrip()
+            if not (stripped.startswith("# ") or stripped == "#" or stripped.startswith("#\n")):
                 body = f"# {group.title}\n\n{body}" if body else f"# {group.title}"
             path.write_text(body + "\n", encoding="utf-8")
         written.append(path)
