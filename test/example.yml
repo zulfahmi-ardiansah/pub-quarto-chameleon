@@ -36,6 +36,11 @@ template:
 mermaid:
   layout: elk                               # Layout engine: omit for default (dagre), or "elk" for the ELK layout engine
 
+# Final output files. Images remain embedded in the DOCX when export is false.
+output:
+  export:
+    images: false                           # Copy only the DOCX; defaults to true
+
 # Quarto format overrides — any property here deep-merges into config/_quarto.yml
 # Only include what you want to change; everything else keeps its default value
 quarto:

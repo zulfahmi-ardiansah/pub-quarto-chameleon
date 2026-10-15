@@ -32,7 +32,7 @@ When you run `qlon <config.yml>`, the following steps execute in order:
 | 5 | Render | Runs `quarto render` inside the workspace, producing a `.docx` file styled by the reference template. |
 | 6 | Patch headers | Opens the rendered `.docx` and replaces the `Head-Title` and `Head-Subtitle` placeholder strings in every page header. Scales down any inline image larger than the page content zone (page area minus margins) to fit while preserving aspect ratio. Also marks the TOC field as dirty so Word refreshes it on next open. |
 | 7 | Collect output | Copies the final `.docx` to the directory where you ran the command. |
-| 8 | Collect images | Copies all images used in the document to an `Image/` folder in your working directory, named `Diagram-x-y.ext` (x = chapter order, y = image order within the chapter). |
+| 8 | Collect images | When `output.export.images` is `true` (the default), copies all images used in the document to an `Image/` folder in your working directory, named `Diagram-x-y.ext` (x = chapter order, y = image order within the chapter). |
 | 9 | Clean up | Deletes the UUID workspace folder. The `render/` parent directory remains but is otherwise empty. |
 
 ---
@@ -44,7 +44,7 @@ After each run, Qlon prints a checklist. Keep these in mind when opening the out
 1. **Update fields** — Word will prompt you to update fields on first open. Accept it to refresh the Table of Contents.
 2. **Image sizing** — Oversized images are auto-scaled to fit the page content zone (page area minus margins), preserving aspect ratio. Smaller images keep their original size — enlarge manually in Word if needed.
 3. **Mermaid diagrams** — Diagrams are pre-rendered as PNG. If a diagram looks too small or blurry, scale it up in Word.
-4. **Image folder** — All images are also saved to `./Image/` for reference or reuse.
+4. **Image folder** — When image export is enabled, images are also saved to `./Image/` for reference or reuse.
 
 ---
 
@@ -185,7 +185,7 @@ chmod +x bin/qlon.sh    # first time only
 bin/qlon.sh <config.yml>
 ```
 
-The output `.docx` is written to whichever directory you run the command from. Images are saved to an `Image/` subfolder in the same location.
+The output `.docx` is written to whichever directory you run the command from. By default, images are saved to an `Image/` subfolder in the same location when the document uses images.
 
 ### Arguments
 
@@ -297,6 +297,7 @@ quarto:
 | `template.preset` | no | Name of a template in the `template/` folder, e.g. `adw-iproc` (mutually exclusive with `template.custom`) |
 | `template.custom` | no | Path to a `.docx` reference template, relative to the config file (mutually exclusive with `template.preset`) |
 | `mermaid.layout` | no | Default Mermaid layout engine (`elk` or omit for dagre). Can be overridden per-diagram via standard Mermaid frontmatter |
+| `output.export.images` | no | Set to `false` to copy only the `.docx` and skip exporting `Image/`. Defaults to `true`; `--no-images` also skips the export |
 | `quarto` | no | Any Quarto format properties to override. Deep-merged into `config/_quarto.yml` after all other settings are applied |
 
 ### Notes
@@ -304,6 +305,7 @@ quarto:
 - `content.folder` is resolved relative to the config file, not your current directory. This means you can run `qlon` from anywhere.
 - The `quarto:` block supports any valid Quarto format property. However, `toc` is always forced to `false` because the TOC is managed by the cover page (`index.qmd`) — this cannot be overridden.
 - To set the output `.docx` filename, use `quarto.book.output-file` (e.g. `quarto: {book: {output-file: "MyReport"}}`). Without it, Quarto derives the filename from `cover.title`.
+- To keep images embedded in the DOCX without copying them into a separate folder, add `output: {export: {images: false}}` to your config. An existing `Image/` folder in the destination is left as it is.
 - Chapter files inside `content.folder` are sorted alphabetically. Name them with a numeric prefix (e.g. `01-intro.qmd`, `02-setup.qmd`) to control order.
 
 ---
@@ -316,7 +318,7 @@ Every rendered document follows this fixed order:
 2. **Table of contents** — also part of the cover page, listing all chapters with page numbers
 3. **Content** — your `.qmd` chapter files, in alphabetical order
 
-In addition to the `.docx`, an `Image/` folder is created in your working directory containing all images used in the document, named `Diagram-x-y.ext`:
+By default, an `Image/` folder is created alongside the `.docx` when the document uses images. Set `output.export.images: false` to copy only the `.docx`. Exported images are named `Diagram-x-y.ext`:
 
 - `x` = chapter number (1-based, alphabetical order of source files)
 - `y` = image order within that chapter
@@ -398,7 +400,7 @@ Your content here...
 
 Relative image references are handled automatically. If your file references `![logo](images/logo.png)`, Qlon copies `images/logo.png` from your content folder into the workspace so the path resolves correctly during rendering.
 
-After rendering, all images are also exported to `./Image/` in your working directory. Images are named `Diagram-x-y.ext` where `x` is the chapter number and `y` is the image's position within that chapter.
+After rendering, images are also exported to `./Image/` in your working directory unless `output.export.images` is `false` or `--no-images` is used. Images are named `Diagram-x-y.ext` where `x` is the chapter number and `y` is the image's position within that chapter.
 
 > **Note:** Images larger than the page content zone (page area minus margins) are automatically scaled down to fit, keeping their aspect ratio. Smaller images are embedded at their original size — enlarge them manually in Word if needed.
 

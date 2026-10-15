@@ -522,6 +522,14 @@ def main() -> None:
         _console.print(f"[red]File not found: {config_path}[/red]")
         sys.exit(1)
 
+    output_config = config.get("output", {})
+    if not isinstance(output_config, dict):
+        parser.error("output must be a YAML mapping")
+    export_config = output_config.get("export", {})
+    if not isinstance(export_config, dict) or not isinstance(export_config.get("images", True), bool):
+        parser.error("output.export.images must be a YAML boolean (true or false)")
+    export_images = export_config.get("images", True) and not args.no_images
+
     global RENDER_DIR, OUTPUT_DIR
     RENDER_DIR = RENDER_BASE_DIR / str(uuid.uuid4())
     OUTPUT_DIR = RENDER_DIR / "_output"
@@ -629,9 +637,9 @@ def main() -> None:
         collect_output(original_cwd)
         progress.advance(task)
 
-        has_images = any(chapter_images) and not args.no_images
-        if args.no_images:
-            progress.update(task, description="Skipping Image/ export (--no-images)...")
+        has_images = any(chapter_images) and export_images
+        if not export_images:
+            progress.update(task, description="Skipping Image/ export...")
         else:
             progress.update(task, description="Exporting images to Image/ folder..." if has_images else "No images found, skipping export...")
             collect_images(original_cwd, chapter_images)
