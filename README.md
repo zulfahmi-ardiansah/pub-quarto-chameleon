@@ -27,7 +27,7 @@ When you run `qlon <config.yml>`, the following steps execute in order:
 |---|------|-------------|
 | 1 | Set up workspace | Creates a UUID-named subfolder inside `render/` and copies the base Quarto config, cover page, and Word reference template into it. The template used is `basic.docx` by default, or the one selected via `--preset` / `--custom`. |
 | 2 | Patch TOC title | *(Optional)* If `content.table.title` is set in your config, rewrites the title in the cover page frontmatter. |
-| 3 | Copy content | Copies all `.qmd` and `.md` files from your content folder into the workspace, sorted alphabetically. `.md` files are staged as `.qmd` — Quarto picks up their first `#` heading as the chapter title natively. Any relative images referenced in the files are also copied. Mermaid diagrams (` ```mermaid ` blocks) are rendered to high-resolution PNG images at this step, named `Diagram-x-y.png` (chapter-image order), and replaced with image references. |
+| 3 | Copy content | Copies the file named by `content.entry`, or all top-level `.qmd` and `.md` files alphabetically when no entry is set. Quarto includes are expanded recursively. `.md` files are staged as `.qmd` — Quarto picks up their first `#` heading as the chapter title natively. Relative images are also copied. Mermaid diagrams (` ```mermaid ` blocks) are rendered to high-resolution PNG images at this step, named `Diagram-x-y.png` (chapter-image order), and replaced with image references. |
 | 4 | Configure Quarto | Injects cover metadata (title, subtitle, author, date) and the chapter list into the workspace `_quarto.yml`. Any `quarto:` overrides in your config are deep-merged on top. |
 | 5 | Render | Runs `quarto render` inside the workspace, producing a `.docx` file styled by the reference template. |
 | 6 | Patch headers | Opens the rendered `.docx` and replaces the `Head-Title` and `Head-Subtitle` placeholder strings in every page header. Scales down any inline image larger than the page content zone (page area minus margins) to fit while preserving aspect ratio. Also marks the TOC field as dirty so Word refreshes it on next open. |
@@ -273,6 +273,7 @@ header:
 
 content:
   folder: "docs/"
+  entry: "GUIDE.qmd"
   table:
     title: "Table of Contents"
 
@@ -293,6 +294,7 @@ quarto:
 | `header.title` | no | Replaces the `Head-Title` placeholder in every page header |
 | `header.subtitle` | no | Replaces the `Head-Subtitle` placeholder in every page header |
 | `content.folder` | yes | Path to your `.qmd` chapter files, relative to the config file |
+| `content.entry` | no | `.qmd` or `.md` entry file relative to `content.folder`. Only this file becomes a chapter; its Quarto includes are expanded recursively |
 | `content.table.title` | no | Title shown on the table of contents page. Defaults to the value set in `component/index.qmd` |
 | `template.preset` | no | Name of a template in the `template/` folder, e.g. `adw-iproc` (mutually exclusive with `template.custom`) |
 | `template.custom` | no | Path to a `.docx` reference template, relative to the config file (mutually exclusive with `template.preset`) |
@@ -306,7 +308,7 @@ quarto:
 - The `quarto:` block supports any valid Quarto format property. However, `toc` is always forced to `false` because the TOC is managed by the cover page (`index.qmd`) — this cannot be overridden.
 - To set the output `.docx` filename, use `quarto.book.output-file` (e.g. `quarto: {book: {output-file: "MyReport"}}`). Without it, Quarto derives the filename from `cover.title`.
 - To keep images embedded in the DOCX without copying them into a separate folder, add `output: {export: {images: false}}` to your config. An existing `Image/` folder in the destination is left as it is.
-- Chapter files inside `content.folder` are sorted alphabetically. Name them with a numeric prefix (e.g. `01-intro.qmd`, `02-setup.qmd`) to control order.
+- With `content.entry: "GUIDE.qmd"`, a sibling `PREFACE.md` is excluded unless `GUIDE.qmd` includes it directly or through another included file. Use `{{< include PREFACE.md >}}` in the entry file to include it. Without `content.entry`, top-level `.qmd` and `.md` files become chapters in alphabetical order; numeric prefixes (e.g. `01-intro.qmd`) control that order.
 
 ---
 

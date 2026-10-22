@@ -20,8 +20,9 @@ header:
 # Content source — folder containing the .qmd chapter files
 content:
   folder: "."                               # Path relative to this yml file
-                                            # All .qmd files in this folder become chapters,
-                                            # sorted alphabetically after the cover page (index.qmd)
+  entry: "content.qmd"                      # Optional: use only this file as the chapter;
+                                            # its Quarto includes are expanded recursively
+                                            # Omit to use all top-level .qmd/.md files alphabetically
   table:
     title: "Table of Contents"              # Title shown on the table of contents page (index.qmd)
                                             # Omit this key to keep the default title from index.qmd

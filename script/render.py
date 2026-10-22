@@ -237,16 +237,27 @@ def _copy_images(text: str, src_dir: Path) -> None:
 # --- Step Method ---
 
 def copy_content(
-    content_folder: str, config_dir: Path, mermaid_layout: str | None = None
+    content_folder: str, config_dir: Path, mermaid_layout: str | None = None,
+    entry: str | None = None,
 ) -> tuple[list[str], list[list[Path]]]:
-    """Copy all .qmd and .md files from *content_folder* into the workspace.
+    """Copy chapters from *content_folder*, or only *entry* when provided.
 
     .md files are copied as .qmd — Quarto picks up their H1 as the chapter title natively.
-    Relative images referenced in any file are also copied into the workspace.
+    Included files are inlined recursively. Relative images are copied into the workspace.
     Returns the list of .qmd filenames and a per-chapter ordered list of image paths.
     """
     src = (config_dir / content_folder).resolve()
-    files = sorted(list(src.glob("*.qmd")) + list(src.glob("*.md")), key=lambda f: f.name)
+    if entry is None:
+        files = sorted(list(src.glob("*.qmd")) + list(src.glob("*.md")), key=lambda f: f.name)
+    else:
+        if not isinstance(entry, str) or not entry.strip():
+            raise ValueError("content.entry must be a non-empty .qmd or .md path")
+        selected = (src / entry).resolve()
+        if not selected.is_relative_to(src) or selected.suffix.lower() not in {".qmd", ".md"}:
+            raise ValueError("content.entry must name a .qmd or .md file inside content.folder")
+        if not selected.is_file():
+            raise FileNotFoundError(f"content.entry not found: {selected}")
+        files = [selected]
     names: list[str] = []
     chapter_images: list[list[Path]] = []
     for chapter_idx, f in enumerate(files, 1):
@@ -614,7 +625,8 @@ def main() -> None:
 
         progress.update(task, description="Copying and pre-processing content files...")
         chapter_files, chapter_images = copy_content(
-            content.get("folder", "content/"), config_dir, mermaid_layout
+            content.get("folder", "content/"), config_dir, mermaid_layout,
+            entry=content.get("entry"),
         )
         progress.advance(task)
 
